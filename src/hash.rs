@@ -1,6 +1,9 @@
+use crate::table::{HashTables, MemoryTable};
 use crate::utils::{dot_prod, rand_unit_vec};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+
+pub type Hash = Vec<u8>;
 type HyperPlanes = Vec<Vec<f64>>;
 
 /// Also called SimHash.
@@ -28,7 +31,7 @@ impl RandomProjection {
         RandomProjection { hyperplanes: hp }
     }
 
-    fn hash_vec(&self, v: &[f64]) -> Vec<u8> {
+    fn hash_vec(&self, v: &[f64]) -> Hash {
         let mut hash: Vec<u8> = vec![0; self.hyperplanes.len()];
         for (i, plane) in self.hyperplanes.iter().enumerate() {
             if dot_prod(plane, v) >= 0. {
@@ -42,19 +45,25 @@ impl RandomProjection {
 ///
 /// # Arguments
 ///
-/// * `n_hyperplanes` - Number of hyperplanes `K` used to create lsh.
+/// * `n_hyperplanes` - Number of hyperplanes `K` used to create lsh. This is the hash length.
 /// * `n_ht` - Number of hashing tables `L`.
-struct LSH {
+struct LSH<T: HashTables> {
     n_hyperplanes: usize,
     n_ht: usize,
     projections: Vec<RandomProjection>,
     dim: usize,
+    hash_tables: T,
 }
 
-impl LSH {
-    pub fn new(n_hyperplanes: usize, n_hashing_tables: usize, dim: usize, seed: u64) -> LSH {
-        let mut projections = Vec::with_capacity(n_hashing_tables);
-        for i in 0..n_hashing_tables {
+impl LSH<MemoryTable> {
+    pub fn new(
+        n_hyperplanes: usize,
+        n_hash_tables: usize,
+        dim: usize,
+        seed: u64,
+    ) -> LSH<MemoryTable> {
+        let mut projections = Vec::with_capacity(n_hash_tables);
+        for i in 0..n_hash_tables {
             let mut rng = SmallRng::seed_from_u64(i as u64 + seed);
             let seed = rng.gen();
             let proj = RandomProjection::new(n_hyperplanes, dim, seed);
@@ -63,15 +72,17 @@ impl LSH {
 
         LSH {
             n_hyperplanes,
-            n_ht: n_hashing_tables,
+            n_ht: n_hash_tables,
             projections,
             dim,
+            hash_tables: MemoryTable::new(n_hash_tables),
         }
     }
 
-    pub fn store_vec(&self, v: &[f64]) {
-        for proj in self.projections {
+    pub fn store_vec(&mut self, v: &[f64]) {
+        for (i, proj) in self.projections.iter().enumerate() {
             let hash = proj.hash_vec(v);
+            self.hash_tables.put(hash, v.to_vec(), i);
         }
     }
 }
@@ -89,5 +100,12 @@ mod test {
         assert_eq!(h.hash_vec(&[2.1, 3.2, 4.5]), [0, 0, 1, 1, 1]);
         // distant input different hash
         assert_ne!(h.hash_vec(&[-2., -3., -4.]), [0, 0, 1, 1, 1]);
+    }
+
+    #[test]
+    fn test_hash_table_put() {
+        let mut lhs = LSH::new(5, 3, 3, 1);
+        lhs.store_vec(&[2., 3., 4.]);
+        println!("{:?}", lhs.hash_tables)
     }
 }

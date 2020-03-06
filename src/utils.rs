@@ -1,10 +1,10 @@
 use num::Zero;
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 use rand_distr::StandardNormal;
 use std::ops::{Add, Mul};
 
-pub fn rand_unit_vec<rng: Rng>(size: usize, rng: rng) -> Vec<f64> {
+pub fn rand_unit_vec<RNG: Rng>(size: usize, rng: RNG) -> Vec<f64> {
     rng.sample_iter(StandardNormal).take(size).collect()
 }
 
@@ -23,6 +23,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use rand::SeedableRng;
 
     #[test]
     fn test_seed_vec() {

@@ -1,5 +1,4 @@
+#![allow(dead_code)]
 mod hash;
-mod utils;
 mod table;
-
-
+mod utils;
