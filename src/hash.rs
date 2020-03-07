@@ -5,6 +5,10 @@ use rand::{Rng, SeedableRng};
 pub type Hash = Vec<u8>;
 type HyperPlanes = Vec<Vec<f64>>;
 
+pub trait VecHash {
+    fn hash_vec(&self, v: &[f64]) -> Hash;
+}
+
 /// Also called SimHash.
 /// An LSH for the cosine similarity
 /// # Arguments
@@ -29,8 +33,10 @@ impl SignRandomProjections {
 
         SignRandomProjections { hyperplanes: hp }
     }
+}
 
-    pub fn hash_vec(&self, v: &[f64]) -> Hash {
+impl VecHash for SignRandomProjections {
+    fn hash_vec(&self, v: &[f64]) -> Hash {
         let mut hash: Vec<u8> = vec![0; self.hyperplanes.len()];
         for (i, plane) in self.hyperplanes.iter().enumerate() {
             if dot_prod(plane, v) >= 0. {

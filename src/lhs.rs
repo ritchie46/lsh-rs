@@ -1,4 +1,4 @@
-use crate::hash::{Hash, SignRandomProjections};
+use crate::hash::{Hash, SignRandomProjections, VecHash};
 use crate::table::{Bucket, DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
 use fnv::FnvHashSet;
 use rand::rngs::SmallRng;
@@ -49,6 +49,12 @@ impl LSH<MemoryTable> {
                 Ok(_) => (),
                 Err(_) => panic!("Could not store vec"),
             }
+        }
+    }
+
+    pub fn store_vecs(&mut self, vs: &[DataPoint]) {
+        for d in vs {
+            self.store_vec(d)
         }
     }
 
