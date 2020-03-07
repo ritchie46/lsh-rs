@@ -12,3 +12,11 @@ rand = {version = "0.7", features = ["small_rng"]}
 rand_distr = "0.2"
 num = "0.2"
 fnv = "1.0.6"
+
+[lib]
+name = "lsh"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bench"
+path = "src/bench/main.rs"

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 mod hash;
-mod lhs;
+pub mod lsh;
 mod table;
-mod utils;
+pub mod utils;
+pub use table::MemoryTable;

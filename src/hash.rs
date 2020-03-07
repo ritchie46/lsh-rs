@@ -46,3 +46,16 @@ impl VecHash for SignRandomProjections {
         hash
     }
 }
+
+pub struct L2 {
+    // https://arxiv.org/pdf/1411.3787.pdf
+    a: Vec<f64>,
+    r: f64,
+    b: f64,
+}
+
+// impl L2 {
+//     pub fn new(r: f64) -> L2 {
+//
+//     }
+// }

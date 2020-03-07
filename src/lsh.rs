@@ -9,7 +9,7 @@ use rand::{Rng, SeedableRng};
 ///
 /// * `n_hyperplanes` - Number of hyperplanes `K` used to create lsh. This is the hash length.
 /// * `n_ht` - Number of hashing tables `L`.
-struct LSH<T: HashTables> {
+pub struct LSH<T: HashTables> {
     n_hyperplanes: usize,
     n_ht: usize,
     projections: Vec<SignRandomProjections>,
@@ -26,8 +26,8 @@ impl LSH<MemoryTable> {
     ) -> LSH<MemoryTable> {
         // Every new projection is a new hasher.
         let mut projections = Vec::with_capacity(n_hash_tables);
+        let mut rng = SmallRng::seed_from_u64(seed);
         for i in 0..n_hash_tables {
-            let mut rng = SmallRng::seed_from_u64(i as u64 + seed);
             let seed = rng.gen();
             let proj = SignRandomProjections::new(n_hyperplanes, dim, seed);
             projections.push(proj);
