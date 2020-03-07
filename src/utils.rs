@@ -1,8 +1,17 @@
+use ndarray::{Array1, ArrayView1};
 use num::Zero;
 use rand::rngs::SmallRng;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use rand_distr::StandardNormal;
 use std::ops::{Add, Mul};
+
+pub fn l2_norm(x: ArrayView1<f64>) -> f64 {
+    x.dot(&x).sqrt()
+}
+
+pub fn create_rng(seed: u64) -> SmallRng {
+    SmallRng::seed_from_u64(seed)
+}
 
 pub fn rand_unit_vec<RNG: Rng>(size: usize, rng: RNG) -> Vec<f64> {
     rng.sample_iter(StandardNormal).take(size).collect()

@@ -1,9 +1,8 @@
-use crate::utils::{dot_prod, rand_unit_vec};
+use crate::utils::{create_rng, l2_norm, rand_unit_vec};
 use ndarray::{aview1, Array, Array1, Array2, Axis};
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 
 pub type Hash = String;
 type HyperPlanes = Array2<f64>;
@@ -27,7 +26,7 @@ impl SignRandomProjections {
     /// * `k` - Number of hyperplanes used for determining the hash.
     /// This will also be the hash length.
     pub fn new(k: usize, dim: usize, seed: u64) -> SignRandomProjections {
-        let mut rng = SmallRng::seed_from_u64(seed);
+        let mut rng = create_rng(seed);
         let hp = Array::random_using((dim, k), StandardNormal, &mut rng);
 
         SignRandomProjections { hyperplanes: hp }
@@ -58,7 +57,7 @@ pub struct L2 {
 
 impl L2 {
     pub fn new(dim: usize, r: f64, seed: u64) -> L2 {
-        let mut rng = SmallRng::seed_from_u64(seed);
+        let mut rng = create_rng(seed);
         let a = Array::random_using(dim, StandardNormal, &mut rng);
         let b = rng.sample(Uniform::new(0., r)) as f64;
 
@@ -70,6 +69,38 @@ impl VecHash for L2 {
     fn hash_vec(&self, v: &[f64]) -> Hash {
         let h: f64 = ((self.a.t().dot(&aview1(v)) + self.b) / self.r).floor();
         format!("{}", h)
+    }
+}
+
+struct MIPS {
+    // https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf
+    u: f64,
+    m: f64,
+    dim: usize,
+    hasher: L2,
+}
+
+impl MIPS {
+    pub fn new(dim: usize, r: f64, seed: u64) -> MIPS {
+        let l2 = L2::new(dim, r, seed);
+        MIPS {
+            u: 0.,
+            m: 0.,
+            dim,
+            hasher: l2,
+        }
+    }
+
+    pub fn fit(&mut self, v: &[f64]) {
+        let mut max_l2 = 0.;
+        for x in v.chunks(self.dim) {
+            let a = aview1(x);
+            let l2 = l2_norm(a);
+            if l2 > max_l2 {
+                max_l2 = l2
+            }
+        }
+        self.m = max_l2
     }
 }
 
