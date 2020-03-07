@@ -1,4 +1,5 @@
 use crate::hash::Hash;
+use crate::utils::all_eq;
 use fnv::FnvHashMap as HashMap;
 
 pub type DataPoint = Vec<f64>;
@@ -17,6 +18,13 @@ pub trait HashTables {
     /// * `d` - Vector to store in the buckets.
     /// * `hash_table` - Number of the hash_table to store the vector. Ranging from 0 to L.
     fn put(&mut self, hash: Hash, d: DataPoint, hash_table: usize) -> Result<(), HashTableError>;
+
+    fn delete(
+        &mut self,
+        hash: Hash,
+        d: &DataPointSlice,
+        hash_table: usize,
+    ) -> Result<(), HashTableError>;
 
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
@@ -44,16 +52,28 @@ impl MemoryTable {
 }
 
 impl HashTables for MemoryTable {
-    fn put(
-        &mut self,
-        hash: Hash,
-        d: DataPoint,
-        hash_table_idx: usize,
-    ) -> Result<(), HashTableError> {
-        let tbl = &mut self.hash_tables[hash_table_idx];
+    fn put(&mut self, hash: Hash, d: DataPoint, hash_table: usize) -> Result<(), HashTableError> {
+        let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.entry(hash).or_insert_with(|| Vec::new());
         bucket.push(d);
         Ok(())
+    }
+
+    fn delete(
+        &mut self,
+        hash: Hash,
+        d: &DataPointSlice,
+        hash_table: usize,
+    ) -> Result<(), HashTableError> {
+        let tbl = &mut self.hash_tables[hash_table];
+        let bucket = tbl.get_mut(&hash);
+        match bucket {
+            None => return Err(HashTableError::NotFound),
+            Some(bucket) => {
+                bucket.retain(|v| !all_eq(v, d));
+                Ok(())
+            }
+        }
     }
 
     /// Query the whole bucket

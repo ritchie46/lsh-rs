@@ -3,6 +3,7 @@ use crate::utils::{dot_prod, rand_unit_vec};
 use fnv::FnvHashSet;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
+use std::ops::Deref;
 
 pub type Hash = Vec<u8>;
 type HyperPlanes = Vec<Vec<f64>>;
@@ -88,7 +89,11 @@ impl LSH<MemoryTable> {
         }
     }
 
-    pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
+    ///
+    /// # Arguments
+    /// `v` - Query vector
+    /// `dedup` - Deduplicate bucket. This requires a sort and then deduplicate.
+    pub fn query_bucket(&self, v: &DataPointSlice, dedup: bool) -> Vec<&DataPoint> {
         let mut merged_bucket: Vec<&DataPoint> = vec![];
 
         for (i, proj) in self.projections.iter().enumerate() {
@@ -103,7 +108,19 @@ impl LSH<MemoryTable> {
                 _ => panic!("Unexpected query result"),
             }
         }
+        if dedup {
+            merged_bucket
+                .sort_unstable_by_key(|d| d.iter().fold(0, |acc, x| acc + x.powf(2.0) as u64));
+            merged_bucket.dedup();
+        }
         merged_bucket
+    }
+
+    pub fn delete_vec(&mut self, v: &DataPointSlice) {
+        for (i, proj) in self.projections.iter().enumerate() {
+            let hash = proj.hash_vec(v);
+            self.hash_tables.delete(hash, v, i);
+        }
     }
 }
 
@@ -125,9 +142,16 @@ mod test {
     #[test]
     fn test_hash_table() {
         let mut lhs = LSH::new(5, 10, 3, 1);
-        lhs.store_vec(&[2., 3., 4.]);
-        lhs.store_vec(&[-1., -1., 1.]);
+        let v1 = &[2., 3., 4.];
+        let v2 = &[-1., -1., 1.];
+        let v3 = &[0.2, -0.2, 0.2];
+        lhs.store_vec(v1);
+        lhs.store_vec(v2);
+        assert!(lhs.query_bucket(v2, false).len() > 0);
 
-        println!("{:?}", lhs.query_bucket(&[1., -1., 1.]))
+        let bucket_len_before = lhs.query_bucket(v1, true).len();
+        lhs.delete_vec(v1);
+        let bucket_len_before_after = lhs.query_bucket(v1, true).len();
+        assert!(bucket_len_before > bucket_len_before_after);
     }
 }

@@ -20,6 +20,21 @@ where
     sum
 }
 
+pub fn all_eq<T>(u: &[T], v: &[T]) -> bool
+where
+    T: PartialEq,
+{
+    if u.len() != v.len() {
+        return false;
+    }
+    for (u_, v_) in u.iter().zip(v) {
+        if u_ != v_ {
+            return false;
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -36,5 +51,12 @@ mod test {
     fn test_dot() {
         let a = dot_prod(&[1, 2, 3], &[1, 2, 3]);
         assert_eq!(a, 14);
+    }
+
+    #[test]
+    fn test_all_eq() {
+        assert!(all_eq(&[1, 2], &[1, 2]));
+        assert!(all_eq(&[1., 2.], &[1., 2.]));
+        assert!(!all_eq(&[1.1, -1.], &[1., 2.]));
     }
 }
