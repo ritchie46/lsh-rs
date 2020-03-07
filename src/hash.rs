@@ -1,5 +1,6 @@
-use crate::table::{HashTables, MemoryTable};
+use crate::table::{Bucket, DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
 use crate::utils::{dot_prod, rand_unit_vec};
+use fnv::FnvHashSet;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
@@ -62,6 +63,7 @@ impl LSH<MemoryTable> {
         dim: usize,
         seed: u64,
     ) -> LSH<MemoryTable> {
+        // Every new projection is a new hasher.
         let mut projections = Vec::with_capacity(n_hash_tables);
         for i in 0..n_hash_tables {
             let mut rng = SmallRng::seed_from_u64(i as u64 + seed);
@@ -79,11 +81,29 @@ impl LSH<MemoryTable> {
         }
     }
 
-    pub fn store_vec(&mut self, v: &[f64]) {
+    pub fn store_vec(&mut self, v: &DataPointSlice) {
         for (i, proj) in self.projections.iter().enumerate() {
             let hash = proj.hash_vec(v);
             self.hash_tables.put(hash, v.to_vec(), i);
         }
+    }
+
+    pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
+        let mut merged_bucket: Vec<&DataPoint> = vec![];
+
+        for (i, proj) in self.projections.iter().enumerate() {
+            let hash = proj.hash_vec(v);
+            match self.hash_tables.query_bucket(&hash, i) {
+                Err(HashTableError::NotFound) => (),
+                Ok(bucket) => {
+                    for dp in bucket {
+                        merged_bucket.push(dp)
+                    }
+                }
+                _ => panic!("Unexpected query result"),
+            }
+        }
+        merged_bucket
     }
 }
 
@@ -103,9 +123,11 @@ mod test {
     }
 
     #[test]
-    fn test_hash_table_put() {
-        let mut lhs = LSH::new(5, 3, 3, 1);
+    fn test_hash_table() {
+        let mut lhs = LSH::new(5, 10, 3, 1);
         lhs.store_vec(&[2., 3., 4.]);
-        println!("{:?}", lhs.hash_tables)
+        lhs.store_vec(&[-1., -1., 1.]);
+
+        println!("{:?}", lhs.query_bucket(&[1., -1., 1.]))
     }
 }

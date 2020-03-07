@@ -2,9 +2,11 @@ use crate::hash::Hash;
 use fnv::FnvHashMap as HashMap;
 
 pub type DataPoint = Vec<f64>;
+pub type DataPointSlice = [f64];
 pub type Bucket = Vec<DataPoint>;
 pub enum HashTableError {
     Failed,
+    NotFound,
 }
 
 /// Hashtable consisting of `L` Hash tables.
@@ -17,7 +19,7 @@ pub trait HashTables {
     fn put(&mut self, hash: Hash, d: DataPoint, hash_table: usize) -> Result<(), HashTableError>;
 
     /// Query the whole bucket
-    fn query_bucket(&self) -> Result<Bucket, HashTableError>;
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
 
     /// Query the most similar
     fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f64) -> Result<DataPoint, HashTableError>;
@@ -55,8 +57,12 @@ impl HashTables for MemoryTable {
     }
 
     /// Query the whole bucket
-    fn query_bucket(&self) -> Result<Bucket, HashTableError> {
-        Err(HashTableError::Failed)
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError> {
+        let tbl = &self.hash_tables[hash_table];
+        match tbl.get(hash) {
+            None => Err(HashTableError::NotFound),
+            Some(bucket) => Ok(bucket),
+        }
     }
 
     /// Query the most similar
