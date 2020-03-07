@@ -74,18 +74,20 @@ impl VecHash for L2 {
 
 struct MIPS {
     // https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf
-    u: f64,
-    m: f64,
+    U: f64,
+    M: f64,
+    m: usize,
     dim: usize,
     hasher: L2,
 }
 
 impl MIPS {
-    pub fn new(dim: usize, r: f64, seed: u64) -> MIPS {
+    pub fn new(dim: usize, r: f64, U: f64, m: usize, seed: u64) -> MIPS {
         let l2 = L2::new(dim, r, seed);
         MIPS {
-            u: 0.,
-            m: 0.,
+            U,
+            M: 0.,
+            m,
             dim,
             hasher: l2,
         }
@@ -100,7 +102,41 @@ impl MIPS {
                 max_l2 = l2
             }
         }
-        self.m = max_l2
+        self.M = max_l2
+    }
+
+    pub fn tranform_put(&self, x: &[f64]) -> Vec<f64> {
+        let mut x_new = Vec::with_capacity(x.len() + self.m);
+
+        // shrink norm such that l2 norm < U < 1.
+        for x_i in x {
+            x_new.push(x_i / self.M * self.U)
+        }
+
+        let norm_sq = l2_norm(aview1(x)).powf(2.);
+        for i in 1..(self.m + 1) {
+            x_new.push(norm_sq.powf(i as f64))
+        }
+        x_new
+    }
+
+    pub fn transform_query(&self, x: &[f64]) -> Vec<f64> {
+        let mut x_new = Vec::with_capacity(x.len() + self.m);
+        x_new.extend_from_slice(x);
+        for i in 0..self.m {
+            x_new.push(0.5)
+        }
+        x_new
+    }
+
+    fn hash_vec_query(&self, v: &[f64]) -> Hash {
+        let q = self.transform_query(v);
+        self.hasher.hash_vec(&q)
+    }
+
+    fn hash_vec_put(&self, v: &[f64]) -> Hash {
+        let p = self.tranform_put(v);
+        self.hasher.hash_vec(&v)
     }
 }
 
