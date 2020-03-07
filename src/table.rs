@@ -93,9 +93,9 @@ impl HashTables for MemoryTable {
 
 impl std::fmt::Debug for MemoryTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "hash_tables:\nhash, \t buckets\n");
+        write!(f, "hash_tables:\nhash, \t buckets\n")?;
         for ht in self.hash_tables.iter() {
-            write!(f, "{:?}\n", ht);
+            write!(f, "{:?}\n", ht)?;
         }
         Ok(())
     }
