@@ -3,5 +3,6 @@
 
 members = [
     "lsh-rs",
-    "lsh-rs/bench"
+    "lsh-rs/bench",
+    "lsh-py"
 ]
