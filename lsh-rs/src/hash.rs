@@ -103,7 +103,7 @@ impl VecHash for L2 {
     }
 }
 
-struct MIPS {
+pub struct MIPS {
     // https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf
     U: f64,
     M: f64,
@@ -169,7 +169,9 @@ impl MIPS {
         }
         x_new
     }
+}
 
+impl VecHash for MIPS {
     fn hash_vec_query(&self, v: &[f64]) -> Hash {
         let q = self.transform_query(v);
         self.hasher.hash_vec_query(&q)

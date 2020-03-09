@@ -1,4 +1,4 @@
-use crate::hash::{Hash, SignRandomProjections, VecHash, L2};
+use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
 use crate::table::{Bucket, DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
 use crate::utils::create_rng;
 use fnv::FnvHashSet;
@@ -57,6 +57,33 @@ impl LSH<MemoryTable, L2> {
             hashers.push(hasher);
         }
 
+        LSH {
+            n_ht: n_hash_tables,
+            hashers,
+            dim,
+            hash_tables: MemoryTable::new(n_hash_tables),
+        }
+    }
+}
+
+impl LSH<MemoryTable, MIPS> {
+    pub fn new_mips(
+        n_projections: usize,
+        n_hash_tables: usize,
+        dim: usize,
+        r: f64,
+        U: f64,
+        m: usize,
+        seed: u64,
+    ) -> LSH<MemoryTable, MIPS> {
+        let mut hashers = Vec::with_capacity(n_hash_tables);
+        let mut rng = create_rng(seed);
+
+        for _ in 0..n_hash_tables {
+            let seed = rng.gen();
+            let hasher = MIPS::new(dim, r, U, m, n_projections, seed);
+            hashers.push(hasher);
+        }
         LSH {
             n_ht: n_hash_tables,
             hashers,
