@@ -44,7 +44,7 @@ impl LSH<MemoryTable> {
 
     pub fn store_vec(&mut self, v: &DataPointSlice) {
         for (i, proj) in self.projections.iter().enumerate() {
-            let hash = proj.hash_vec(v);
+            let hash = proj.hash_vec_put(v);
             match self.hash_tables.put(hash, v.to_vec(), i) {
                 Ok(_) => (),
                 Err(_) => panic!("Could not store vec"),
@@ -68,7 +68,7 @@ impl LSH<MemoryTable> {
         let mut merged_bucket: Vec<&DataPoint> = vec![];
 
         for (i, proj) in self.projections.iter().enumerate() {
-            let hash = proj.hash_vec(v);
+            let hash = proj.hash_vec_query(v);
             match self.hash_tables.query_bucket(&hash, i) {
                 Err(HashTableError::NotFound) => (),
                 Ok(bucket) => {
@@ -89,7 +89,7 @@ impl LSH<MemoryTable> {
 
     pub fn delete_vec(&mut self, v: &DataPointSlice) {
         for (i, proj) in self.projections.iter().enumerate() {
-            let hash = proj.hash_vec(v);
+            let hash = proj.hash_vec_query(v);
             self.hash_tables.delete(hash, v, i).unwrap_or_default();
         }
     }

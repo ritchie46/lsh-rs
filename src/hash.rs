@@ -9,7 +9,8 @@ pub type Hash = String;
 type HyperPlanes = Array2<f64>;
 
 pub trait VecHash {
-    fn hash_vec(&self, v: &[f64]) -> Hash;
+    fn hash_vec_query(&self, v: &[f64]) -> Hash;
+    fn hash_vec_put(&self, v: &[f64]) -> Hash;
 }
 
 /// Also called SimHash.
@@ -32,9 +33,7 @@ impl SignRandomProjections {
 
         SignRandomProjections { hyperplanes: hp }
     }
-}
 
-impl VecHash for SignRandomProjections {
     fn hash_vec(&self, v: &[f64]) -> Hash {
         let mut hash: Vec<char> = vec!['0'; self.hyperplanes.len_of(Axis(1))];
 
@@ -46,6 +45,16 @@ impl VecHash for SignRandomProjections {
             }
         }
         hash.into_iter().collect()
+    }
+}
+
+impl VecHash for SignRandomProjections {
+    fn hash_vec_query(&self, v: &[f64]) -> Hash {
+        self.hash_vec(v)
+    }
+
+    fn hash_vec_put(&self, v: &[f64]) -> Hash {
+        self.hash_vec(v)
     }
 }
 
@@ -71,9 +80,7 @@ impl L2 {
             n_projections,
         }
     }
-}
 
-impl VecHash for L2 {
     fn hash_vec(&self, v: &[f64]) -> Hash {
         let h = (self.a.dot(&aview1(v)) + &self.b) / self.r;
         let h = h.map(|x| x.floor() as i32);
@@ -83,6 +90,16 @@ impl VecHash for L2 {
             s.push_str(&x.to_string())
         }
         s
+    }
+}
+
+impl VecHash for L2 {
+    fn hash_vec_query(&self, v: &[f64]) -> Hash {
+        self.hash_vec(v)
+    }
+
+    fn hash_vec_put(&self, v: &[f64]) -> Hash {
+        self.hash_vec(v)
     }
 }
 
@@ -141,7 +158,11 @@ impl MIPS {
     pub fn transform_query(&self, x: &[f64]) -> Vec<f64> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
-        x_new.extend_from_slice(x);
+        // normalize query to have l2 == 1.
+        let l2 = l2_norm(aview1(x));
+        for x_i in x {
+            x_new.push(x_i / l2)
+        }
 
         for _ in 0..self.m {
             x_new.push(0.5)
@@ -151,12 +172,12 @@ impl MIPS {
 
     fn hash_vec_query(&self, v: &[f64]) -> Hash {
         let q = self.transform_query(v);
-        self.hasher.hash_vec(&q)
+        self.hasher.hash_vec_query(&q)
     }
 
     fn hash_vec_put(&self, v: &[f64]) -> Hash {
         let p = self.tranform_put(v);
-        self.hasher.hash_vec(&p)
+        self.hasher.hash_vec_query(&p)
     }
 }
 
@@ -169,11 +190,11 @@ mod test {
         // Only test if it runs
         let l2 = L2::new(5, 2.2, 7, 1);
         // two close vector
-        let h1 = l2.hash_vec(&[1., 2., 3., 1., 3.]);
-        let h2 = l2.hash_vec(&[1.1, 2., 3., 1., 3.1]);
+        let h1 = l2.hash_vec_query(&[1., 2., 3., 1., 3.]);
+        let h2 = l2.hash_vec_query(&[1.1, 2., 3., 1., 3.1]);
 
         // a distant vec
-        let h3 = l2.hash_vec(&[100., 100., 100., 100., 100.1]);
+        let h3 = l2.hash_vec_query(&[100., 100., 100., 100., 100.1]);
 
         println!("close: {:?} distant: {}", (&h1, &h2), &h3);
         assert_eq!(h1, h2);
