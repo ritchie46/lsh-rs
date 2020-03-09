@@ -2,5 +2,6 @@
 [workspace]
 
 members = [
-    "lsh-rs"
+    "lsh-rs",
+    "lsh-rs/bench"
 ]

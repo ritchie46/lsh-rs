@@ -1,11 +1,11 @@
 #![feature(test)]
 extern crate test;
-use lsh::{lsh::LSH, utils::rand_unit_vec, MemoryTable};
+use lsh::{lsh::LSH, utils::rand_unit_vec, MemoryTable, SignRandomProjections};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use test::Bencher;
 
-fn store_n(n: usize, dim: usize) -> LSH<MemoryTable> {
+fn store_n(n: usize, dim: usize) -> LSH<MemoryTable, SignRandomProjections> {
     let mut v = Vec::with_capacity(n);
     for i in 0..n {
         let rng = SmallRng::seed_from_u64(i as u64);

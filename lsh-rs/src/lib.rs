@@ -6,4 +6,5 @@ mod hash;
 pub mod lsh;
 mod table;
 pub mod utils;
+pub use hash::{SignRandomProjections, L2, MIPS};
 pub use table::MemoryTable;
