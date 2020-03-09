@@ -75,7 +75,7 @@ impl L2 {
 
 impl VecHash for L2 {
     fn hash_vec(&self, v: &[f64]) -> Hash {
-        let h = (self.a.t().dot(&aview1(v)) + &self.b) / self.r;
+        let h = (self.a.dot(&aview1(v)) + &self.b) / self.r;
         let h = h.map(|x| x.floor() as i32);
 
         let mut s = String::with_capacity(h.len() * 3);
@@ -167,7 +167,7 @@ mod test {
     #[test]
     fn test_l2() {
         // Only test if it runs
-        let l2 = L2::new(5, 2.2, 5, 1);
+        let l2 = L2::new(5, 2.2, 7, 1);
         // two close vector
         let h1 = l2.hash_vec(&[1., 2., 3., 1., 3.]);
         let h2 = l2.hash_vec(&[1.1, 2., 3., 1., 3.1]);
