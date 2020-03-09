@@ -1,7 +1,7 @@
 
 
 bench:
-	@cargo +nightly bench --bin bench --features blas
+	@cd lsh-rs cargo +nightly bench --bin bench --features blas
 
 test:
-	@cargo test --lib --features blas
+	@cd lsh-rs && cargo test --lib --features blas
