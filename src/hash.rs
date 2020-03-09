@@ -1,4 +1,5 @@
 use crate::utils::{create_rng, l2_norm, rand_unit_vec};
+use ndarray::prelude::*;
 use ndarray::{aview1, Array, Array1, Array2, Axis};
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
@@ -50,25 +51,38 @@ impl VecHash for SignRandomProjections {
 
 pub struct L2 {
     // https://arxiv.org/pdf/1411.3787.pdf
-    a: Array1<f64>,
+    a: Array2<f64>,
     r: f64,
-    b: f64,
+    b: Array1<f64>,
+    n_projections: usize,
 }
 
 impl L2 {
-    pub fn new(dim: usize, r: f64, seed: u64) -> L2 {
+    pub fn new(dim: usize, r: f64, n_projections: usize, seed: u64) -> L2 {
         let mut rng = create_rng(seed);
-        let a = Array::random_using(dim, StandardNormal, &mut rng);
-        let b = rng.sample(Uniform::new(0., r)) as f64;
+        let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
+        let uniform_dist = Uniform::new(0., r);
+        let b = Array::random_using((n_projections), uniform_dist, &mut rng);
 
-        L2 { a, r, b }
+        L2 {
+            a,
+            r,
+            b,
+            n_projections,
+        }
     }
 }
 
 impl VecHash for L2 {
     fn hash_vec(&self, v: &[f64]) -> Hash {
-        let h: f64 = ((self.a.t().dot(&aview1(v)) + self.b) / self.r).floor();
-        format!("{}", h)
+        let h = (self.a.t().dot(&aview1(v)) + &self.b) / self.r;
+        let h = h.map(|x| x.floor() as i32);
+
+        let mut s = String::with_capacity(h.len() * 3);
+        for x in h.iter() {
+            s.push_str(&x.to_string())
+        }
+        s
     }
 }
 
@@ -82,8 +96,8 @@ struct MIPS {
 }
 
 impl MIPS {
-    pub fn new(dim: usize, r: f64, U: f64, m: usize, seed: u64) -> MIPS {
-        let l2 = L2::new(dim, r, seed);
+    pub fn new(dim: usize, r: f64, U: f64, m: usize, n_projections: usize, seed: u64) -> MIPS {
+        let l2 = L2::new(dim + m, r, n_projections, seed);
         MIPS {
             U,
             M: 0.,
@@ -108,12 +122,16 @@ impl MIPS {
     pub fn tranform_put(&self, x: &[f64]) -> Vec<f64> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
+        if self.M == 0. {
+            panic!("MIPS is not fitted")
+        }
+
         // shrink norm such that l2 norm < U < 1.
         for x_i in x {
             x_new.push(x_i / self.M * self.U)
         }
 
-        let norm_sq = l2_norm(aview1(x)).powf(2.);
+        let norm_sq = l2_norm(aview1(&x_new)).powf(2.);
         for i in 1..(self.m + 1) {
             x_new.push(norm_sq.powf(i as f64))
         }
@@ -122,8 +140,10 @@ impl MIPS {
 
     pub fn transform_query(&self, x: &[f64]) -> Vec<f64> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
+
         x_new.extend_from_slice(x);
-        for i in 0..self.m {
+
+        for _ in 0..self.m {
             x_new.push(0.5)
         }
         x_new
@@ -136,32 +156,27 @@ impl MIPS {
 
     fn hash_vec_put(&self, v: &[f64]) -> Hash {
         let p = self.tranform_put(v);
-        self.hasher.hash_vec(&v)
+        self.hasher.hash_vec(&p)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use num::abs;
 
     #[test]
     fn test_l2() {
         // Only test if it runs
-        let h = L2::new(5, 0.09, 12);
+        let l2 = L2::new(5, 2.2, 5, 1);
         // two close vector
-        let hash1 = h.hash_vec(&[1., 2., 3., 1., 3.]);
-        let hash2 = h.hash_vec(&[1.1, 2., 3., 1., 3.1]);
-
-        let h1: i32 = hash1.parse().unwrap();
-        let h2: i32 = hash2.parse().unwrap();
+        let h1 = l2.hash_vec(&[1., 2., 3., 1., 3.]);
+        let h2 = l2.hash_vec(&[1.1, 2., 3., 1., 3.1]);
 
         // a distant vec
-        let hash3 = h.hash_vec(&[100., 100., 100., 100., 100.1]);
-        let h3: i32 = hash3.parse().unwrap();
+        let h3 = l2.hash_vec(&[100., 100., 100., 100., 100.1]);
 
-        println!("close: {:?} distant: {}", (h1, h2), h3);
-        assert!(abs(h1 - h2) < abs(h1 - h3));
-        assert!(abs(h1 - h2) < abs(h2 - h3));
+        println!("close: {:?} distant: {}", (&h1, &h2), &h3);
+        assert_eq!(h1, h2);
+        assert_ne!(h1, h3);
     }
 }
