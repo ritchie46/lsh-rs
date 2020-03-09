@@ -11,7 +11,7 @@ fn store_n(n: usize, dim: usize) -> LSH<MemoryTable> {
         let rng = SmallRng::seed_from_u64(i as u64);
         v.push(rand_unit_vec(dim, rng))
     }
-    let mut lsh = LSH::new(20, 7, 100, 1);
+    let mut lsh = LSH::new_srp(20, 7, 100, 1);
     lsh.store_vecs(&v);
     lsh
 }
