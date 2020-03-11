@@ -45,7 +45,7 @@ impl LSH<MemoryTable, L2> {
         n_projections: usize,
         n_hash_tables: usize,
         dim: usize,
-        r: f64,
+        r: f32,
         seed: u64,
     ) -> LSH<MemoryTable, L2> {
         let mut hashers = Vec::with_capacity(n_hash_tables);
@@ -71,8 +71,8 @@ impl LSH<MemoryTable, MIPS> {
         n_projections: usize,
         n_hash_tables: usize,
         dim: usize,
-        r: f64,
-        U: f64,
+        r: f32,
+        U: f32,
         m: usize,
         seed: u64,
     ) -> LSH<MemoryTable, MIPS> {

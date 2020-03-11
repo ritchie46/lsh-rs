@@ -5,7 +5,7 @@ use rand::{Rng, SeedableRng};
 use rand_distr::StandardNormal;
 use std::ops::{Add, Mul};
 
-pub fn l2_norm(x: ArrayView1<f64>) -> f64 {
+pub fn l2_norm(x: ArrayView1<f32>) -> f32 {
     x.dot(&x).sqrt()
 }
 
@@ -14,7 +14,7 @@ pub fn create_rng(seed: u64) -> SmallRng {
     SmallRng::seed_from_u64(seed)
 }
 
-pub fn rand_unit_vec<RNG: Rng>(size: usize, rng: RNG) -> Vec<f64> {
+pub fn rand_unit_vec<RNG: Rng>(size: usize, rng: RNG) -> Vec<f32> {
     rng.sample_iter(StandardNormal).take(size).collect()
 }
 

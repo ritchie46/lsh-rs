@@ -6,11 +6,11 @@ use ndarray_rand::RandomExt;
 use rand::Rng;
 
 pub type Hash = String;
-type HyperPlanes = Array2<f64>;
+type HyperPlanes = Array2<f32>;
 
 pub trait VecHash {
-    fn hash_vec_query(&self, v: &[f64]) -> Hash;
-    fn hash_vec_put(&self, v: &[f64]) -> Hash;
+    fn hash_vec_query(&self, v: &[f32]) -> Hash;
+    fn hash_vec_put(&self, v: &[f32]) -> Hash;
 }
 
 /// Also called SimHash.
@@ -34,7 +34,7 @@ impl SignRandomProjections {
         SignRandomProjections { hyperplanes: hp }
     }
 
-    fn hash_vec(&self, v: &[f64]) -> Hash {
+    fn hash_vec(&self, v: &[f32]) -> Hash {
         let mut hash: Vec<char> = vec!['0'; self.hyperplanes.len_of(Axis(1))];
 
         let v = aview1(v);
@@ -49,25 +49,25 @@ impl SignRandomProjections {
 }
 
 impl VecHash for SignRandomProjections {
-    fn hash_vec_query(&self, v: &[f64]) -> Hash {
+    fn hash_vec_query(&self, v: &[f32]) -> Hash {
         self.hash_vec(v)
     }
 
-    fn hash_vec_put(&self, v: &[f64]) -> Hash {
+    fn hash_vec_put(&self, v: &[f32]) -> Hash {
         self.hash_vec(v)
     }
 }
 
 pub struct L2 {
     // https://arxiv.org/pdf/1411.3787.pdf
-    a: Array2<f64>,
-    r: f64,
-    b: Array1<f64>,
+    a: Array2<f32>,
+    r: f32,
+    b: Array1<f32>,
     n_projections: usize,
 }
 
 impl L2 {
-    pub fn new(dim: usize, r: f64, n_projections: usize, seed: u64) -> L2 {
+    pub fn new(dim: usize, r: f32, n_projections: usize, seed: u64) -> L2 {
         let mut rng = create_rng(seed);
         let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
         let uniform_dist = Uniform::new(0., r);
@@ -81,7 +81,7 @@ impl L2 {
         }
     }
 
-    fn hash_vec(&self, v: &[f64]) -> Hash {
+    fn hash_vec(&self, v: &[f32]) -> Hash {
         let h = (self.a.dot(&aview1(v)) + &self.b) / self.r;
         let h = h.map(|x| x.floor() as i32);
 
@@ -94,26 +94,26 @@ impl L2 {
 }
 
 impl VecHash for L2 {
-    fn hash_vec_query(&self, v: &[f64]) -> Hash {
+    fn hash_vec_query(&self, v: &[f32]) -> Hash {
         self.hash_vec(v)
     }
 
-    fn hash_vec_put(&self, v: &[f64]) -> Hash {
+    fn hash_vec_put(&self, v: &[f32]) -> Hash {
         self.hash_vec(v)
     }
 }
 
 pub struct MIPS {
     // https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf
-    U: f64,
-    M: f64,
+    U: f32,
+    M: f32,
     m: usize,
     dim: usize,
     hasher: L2,
 }
 
 impl MIPS {
-    pub fn new(dim: usize, r: f64, U: f64, m: usize, n_projections: usize, seed: u64) -> MIPS {
+    pub fn new(dim: usize, r: f32, U: f32, m: usize, n_projections: usize, seed: u64) -> MIPS {
         let l2 = L2::new(dim + m, r, n_projections, seed);
         MIPS {
             U,
@@ -124,7 +124,7 @@ impl MIPS {
         }
     }
 
-    pub fn fit(&mut self, v: &[f64]) {
+    pub fn fit(&mut self, v: &[f32]) {
         let mut max_l2 = 0.;
         for x in v.chunks(self.dim) {
             let a = aview1(x);
@@ -136,7 +136,7 @@ impl MIPS {
         self.M = max_l2
     }
 
-    pub fn tranform_put(&self, x: &[f64]) -> Vec<f64> {
+    pub fn tranform_put(&self, x: &[f32]) -> Vec<f32> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
         if self.M == 0. {
@@ -150,12 +150,12 @@ impl MIPS {
 
         let norm_sq = l2_norm(aview1(&x_new)).powf(2.);
         for i in 1..(self.m + 1) {
-            x_new.push(norm_sq.powf(i as f64))
+            x_new.push(norm_sq.powf(i as f32))
         }
         x_new
     }
 
-    pub fn transform_query(&self, x: &[f64]) -> Vec<f64> {
+    pub fn transform_query(&self, x: &[f32]) -> Vec<f32> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
         // normalize query to have l2 == 1.
@@ -172,12 +172,12 @@ impl MIPS {
 }
 
 impl VecHash for MIPS {
-    fn hash_vec_query(&self, v: &[f64]) -> Hash {
+    fn hash_vec_query(&self, v: &[f32]) -> Hash {
         let q = self.transform_query(v);
         self.hasher.hash_vec_query(&q)
     }
 
-    fn hash_vec_put(&self, v: &[f64]) -> Hash {
+    fn hash_vec_put(&self, v: &[f32]) -> Hash {
         let p = self.tranform_put(v);
         self.hasher.hash_vec_query(&p)
     }

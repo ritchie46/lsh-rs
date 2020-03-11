@@ -2,8 +2,8 @@ use crate::hash::Hash;
 use crate::utils::all_eq;
 use fnv::FnvHashMap as HashMap;
 
-pub type DataPoint = Vec<f64>;
-pub type DataPointSlice = [f64];
+pub type DataPoint = Vec<f32>;
+pub type DataPointSlice = [f32];
 pub type Bucket = Vec<DataPoint>;
 pub enum HashTableError {
     Failed,
@@ -30,7 +30,7 @@ pub trait HashTables {
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
 
     /// Query the most similar
-    fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f64) -> Result<DataPoint, HashTableError>;
+    fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError>;
 }
 
 pub struct MemoryTable {
@@ -86,7 +86,7 @@ impl HashTables for MemoryTable {
     }
 
     /// Query the most similar
-    fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f64) -> Result<DataPoint, HashTableError> {
+    fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError> {
         Err(HashTableError::Failed)
     }
 }
