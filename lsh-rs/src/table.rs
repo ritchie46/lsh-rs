@@ -1,5 +1,5 @@
 use crate::hash::Hash;
-use crate::utils::all_eq;
+use crate::utils::{all_eq, increase_capacity};
 use fnv::FnvHashMap as HashMap;
 use fnv::FnvHashSet as HashSet;
 
@@ -33,10 +33,7 @@ impl VecStore {
     }
 
     fn increase_storage(&mut self, size: usize) {
-        if self.map.capacity() < size {
-            let diff = size - self.map.capacity();
-            self.map.reserve(diff)
-        }
+        increase_capacity(size, &mut self.map);
     }
 }
 
@@ -143,6 +140,7 @@ impl HashTables for MemoryTable {
     }
 
     fn increase_storage(&mut self, size: usize) {
+        increase_capacity(size, &mut self.hash_tables);
         self.vec_store.increase_storage(size);
     }
 }

@@ -5,6 +5,13 @@ use rand::{Rng, SeedableRng};
 use rand_distr::StandardNormal;
 use std::ops::{Add, Mul};
 
+pub fn increase_capacity<T>(size: usize, container: &mut Vec<T>) {
+    if container.capacity() < size {
+        let diff = size - container.capacity();
+        container.reserve(diff)
+    }
+}
+
 pub fn l2_norm(x: ArrayView1<f32>) -> f32 {
     x.dot(&x).sqrt()
 }
