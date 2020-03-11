@@ -1,31 +1,6 @@
 use lsh::{MemoryTable, SignRandomProjections, L2, LSH, MIPS};
 use pyo3::prelude::*;
 
-macro_rules! methods {
-    () => [
-       fn store_vec(&mut self, v: Vec<f64>) {
-            self.lsh.store_vec(&v)
-        }
-
-        pub fn store_vecs(&mut self, vs: Vec<Vec<f64>>) {
-            self.lsh.store_vecs(&vs)
-        }
-
-        pub fn query_bucket(&self, v: Vec<f64>, dedup: bool) -> PyResult<Vec<Vec<f64>>> {
-            let q = self.lsh.query_bucket(&v, dedup);
-            let mut result = Vec::with_capacity(q.len());
-            for qi in q {
-                result.push(qi.clone())
-            }
-            Ok(result)
-        }
-
-        pub fn delete_vec(&mut self, v: Vec<f64>) {
-            self.lsh.delete_vec(&v)
-        }
-    ]
-}
-
 #[pymodule]
 fn lshpy(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<LSHL2>()?;
@@ -46,7 +21,26 @@ impl LSHL2 {
         let lsh = LSH::new_l2(n_projections, n_hash_tables, dim, r, seed);
         LSHL2 { lsh }
     }
-    methods![];
+    fn store_vec(&mut self, v: Vec<f64>) {
+        self.lsh.store_vec(&v)
+    }
+
+    pub fn store_vecs(&mut self, vs: Vec<Vec<f64>>) {
+        self.lsh.store_vecs(&vs)
+    }
+
+    fn query_bucket(&self, v: Vec<f64>, dedup: bool) -> PyResult<Vec<Vec<f64>>> {
+        let q = self.lsh.query_bucket(&v, dedup);
+        let mut result = Vec::with_capacity(q.len());
+        for qi in q {
+            result.push(qi.clone())
+        }
+        Ok(result)
+    }
+
+    fn delete_vec(&mut self, v: Vec<f64>) {
+        self.lsh.delete_vec(&v)
+    }
 }
 
 #[pyclass]
@@ -69,7 +63,26 @@ impl LSH_MIPS {
         let lsh = LSH::new_mips(n_projections, n_hash_tables, dim, r, U, m, seed);
         LSH_MIPS { lsh }
     }
-    methods![];
+    fn store_vec(&mut self, v: Vec<f64>) {
+        self.lsh.store_vec(&v)
+    }
+
+    pub fn store_vecs(&mut self, vs: Vec<Vec<f64>>) {
+        self.lsh.store_vecs(&vs)
+    }
+
+    fn query_bucket(&self, v: Vec<f64>, dedup: bool) -> PyResult<Vec<Vec<f64>>> {
+        let q = self.lsh.query_bucket(&v, dedup);
+        let mut result = Vec::with_capacity(q.len());
+        for qi in q {
+            result.push(qi.clone())
+        }
+        Ok(result)
+    }
+
+    fn delete_vec(&mut self, v: Vec<f64>) {
+        self.lsh.delete_vec(&v)
+    }
 }
 
 #[pyclass]
@@ -84,5 +97,24 @@ impl LSH_SRP {
         let lsh = LSH::new_srp(n_projections, n_hash_tables, dim, seed);
         LSH_SRP { lsh }
     }
-    methods![];
+    fn store_vec(&mut self, v: Vec<f64>) {
+        self.lsh.store_vec(&v)
+    }
+
+    pub fn store_vecs(&mut self, vs: Vec<Vec<f64>>) {
+        self.lsh.store_vecs(&vs)
+    }
+
+    fn query_bucket(&self, v: Vec<f64>, dedup: bool) -> PyResult<Vec<Vec<f64>>> {
+        let q = self.lsh.query_bucket(&v, dedup);
+        let mut result = Vec::with_capacity(q.len());
+        for qi in q {
+            result.push(qi.clone())
+        }
+        Ok(result)
+    }
+
+    fn delete_vec(&mut self, v: Vec<f64>) {
+        self.lsh.delete_vec(&v)
+    }
 }
