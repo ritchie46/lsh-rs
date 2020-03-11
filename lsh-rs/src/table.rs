@@ -15,7 +15,7 @@ pub enum HashTableError {
 /// Indexible vector storage.
 /// indexes will be stored in hashtables. The original vectors can be looked up in this data structure.
 struct VecStore {
-    map: Vec<DataPoint>,
+    pub map: Vec<DataPoint>,
 }
 
 impl VecStore {
@@ -44,7 +44,12 @@ pub trait HashTables {
     /// * `hash` - hashed vector.
     /// * `d` - Vector to store in the buckets.
     /// * `hash_table` - Number of the hash_table to store the vector. Ranging from 0 to L.
-    fn put(&mut self, hash: Hash, d: DataPoint, hash_table: usize) -> Result<(), HashTableError>;
+    fn put(
+        &mut self,
+        hash: Hash,
+        d: &DataPointSlice,
+        hash_table: usize,
+    ) -> Result<(u32), HashTableError>;
 
     fn delete(
         &mut self,
@@ -86,12 +91,22 @@ impl MemoryTable {
 }
 
 impl HashTables for MemoryTable {
-    fn put(&mut self, hash: Hash, d: DataPoint, hash_table: usize) -> Result<(), HashTableError> {
+    fn put(
+        &mut self,
+        hash: Hash,
+        d: &DataPointSlice,
+        hash_table: usize,
+    ) -> Result<(u32), HashTableError> {
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
-        let idx = self.vec_store.push(d);
+        let mut idx;
+        if hash_table == 0 {
+            idx = self.vec_store.push(d.to_vec());
+        } else {
+            idx = (self.vec_store.map.len() - 1) as u32;
+        }
         bucket.insert(idx);
-        Ok(())
+        Ok(idx)
     }
 
     /// Expensive operation we need to do a linear search over all datapoints

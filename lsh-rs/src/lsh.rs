@@ -129,15 +129,15 @@ impl<H: VecHash> LSH<MemoryTable, H> {
 }
 
 impl<H: VecHash> LSH<MemoryTable, H> {
-    /// Store a single vector in storage.
+    /// Store a single vector in storage. Returns id.
     ///
     /// # Arguments
     /// * `v` - Data point.
     pub fn store_vec(&mut self, v: &DataPointSlice) {
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_put(v);
-            match self.hash_tables.put(hash, v.to_vec(), i) {
-                Ok(_) => (),
+            match self.hash_tables.put(hash, v, i) {
+                Ok(idx) => (),
                 Err(_) => panic!("Could not store vec"),
             }
         }
