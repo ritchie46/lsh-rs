@@ -1,7 +1,7 @@
 use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
 use crate::table::{Bucket, DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
 use crate::utils::create_rng;
-use fnv::FnvHashSet;
+use fnv::{FnvBuildHasher, FnvHashSet as HashSet};
 use rand::{Rng, SeedableRng};
 
 ///
@@ -117,26 +117,22 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     /// `v` - Query vector
     /// `dedup` - Deduplicate bucket. This requires a sort and then deduplicate. O(n log n)
     pub fn query_bucket(&self, v: &DataPointSlice, dedup: bool) -> Vec<&DataPoint> {
-        let mut merged_bucket: Vec<&DataPoint> = vec![];
+        let mut bucket_union = HashSet::default();
 
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
             match self.hash_tables.query_bucket(&hash, i) {
                 Err(HashTableError::NotFound) => (),
                 Ok(bucket) => {
-                    for dp in bucket {
-                        merged_bucket.push(dp)
-                    }
+                    bucket_union = bucket_union.union(bucket).cloned().collect();
                 }
                 _ => panic!("Unexpected query result"),
             }
         }
-        if dedup {
-            merged_bucket
-                .sort_unstable_by_key(|d| d.iter().fold(0, |acc, x| acc + x.powf(2.0) as u64));
-            merged_bucket.dedup();
-        }
-        merged_bucket
+        bucket_union
+            .iter()
+            .map(|&idx| self.hash_tables.idx_to_datapoint(idx))
+            .collect()
     }
 
     pub fn delete_vec(&mut self, v: &DataPointSlice) {

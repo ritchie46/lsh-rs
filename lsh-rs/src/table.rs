@@ -1,13 +1,36 @@
 use crate::hash::Hash;
 use crate::utils::all_eq;
 use fnv::FnvHashMap as HashMap;
+use fnv::FnvHashSet as HashSet;
 
 pub type DataPoint = Vec<f32>;
 pub type DataPointSlice = [f32];
-pub type Bucket = Vec<DataPoint>;
+/// Bucket contains indexes to VecStore
+pub type Bucket = HashSet<u32>;
 pub enum HashTableError {
     Failed,
     NotFound,
+}
+
+/// Indexible vector storage.
+/// indexes will be stored in hashtables. The original vectors can be looked up in this data structure.
+struct VecStore {
+    map: Vec<DataPoint>,
+}
+
+impl VecStore {
+    fn push(&mut self, d: DataPoint) -> u32 {
+        self.map.push(d);
+        (self.map.len() - 1) as u32
+    }
+
+    fn position(&self, d: &DataPointSlice) -> Option<u32> {
+        self.map.iter().position(|x| all_eq(x, d)).map(|x| x as u32)
+    }
+
+    fn get(&self, idx: u32) -> &DataPoint {
+        &self.map[idx as usize]
+    }
 }
 
 /// Hashtable consisting of `L` Hash tables.
@@ -31,11 +54,14 @@ pub trait HashTables {
 
     /// Query the most similar
     fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError>;
+
+    fn idx_to_datapoint(&self, idx: u32) -> &DataPoint;
 }
 
 pub struct MemoryTable {
     hash_tables: Vec<HashMap<Hash, Bucket>>,
     n_hash_tables: usize,
+    vec_store: VecStore,
 }
 
 impl MemoryTable {
@@ -44,9 +70,11 @@ impl MemoryTable {
         // this way the capacity can be approximated by the number of DataPoints that will
         // be stored.
         let hash_tables = vec![HashMap::default(); n_hash_tables];
+        let vector_store = VecStore { map: vec![] };
         MemoryTable {
             hash_tables,
             n_hash_tables,
+            vec_store: vector_store,
         }
     }
 }
@@ -54,23 +82,34 @@ impl MemoryTable {
 impl HashTables for MemoryTable {
     fn put(&mut self, hash: Hash, d: DataPoint, hash_table: usize) -> Result<(), HashTableError> {
         let tbl = &mut self.hash_tables[hash_table];
-        let bucket = tbl.entry(hash).or_insert_with(|| Vec::new());
-        bucket.push(d);
+        let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
+        let idx = self.vec_store.push(d);
+        bucket.insert(idx);
         Ok(())
     }
 
+    /// Expensive operation we need to do a linear search over all datapoints
     fn delete(
         &mut self,
         hash: Hash,
         d: &DataPointSlice,
         hash_table: usize,
     ) -> Result<(), HashTableError> {
+        // First find the data point in the VecStore
+        let idx = match self.vec_store.position(d) {
+            None => return Ok(()),
+            Some(idx) => idx,
+        };
+        // Note: data point remains in VecStore as shrinking the vector would mean we need to
+        // re-hash all datapoints.
+
+        // Then remove idx from hash tables
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.get_mut(&hash);
         match bucket {
             None => return Err(HashTableError::NotFound),
             Some(bucket) => {
-                bucket.retain(|v| !all_eq(v, d));
+                bucket.remove(&idx);
                 Ok(())
             }
         }
@@ -88,6 +127,10 @@ impl HashTables for MemoryTable {
     /// Query the most similar
     fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError> {
         Err(HashTableError::Failed)
+    }
+
+    fn idx_to_datapoint(&self, idx: u32) -> &DataPoint {
+        self.vec_store.get(idx)
     }
 }
 
