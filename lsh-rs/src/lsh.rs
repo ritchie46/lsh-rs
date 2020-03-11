@@ -133,14 +133,16 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     ///
     /// # Arguments
     /// * `v` - Data point.
-    pub fn store_vec(&mut self, v: &DataPointSlice) {
+    pub fn store_vec(&mut self, v: &DataPointSlice) -> u32 {
+        let mut idx = 0;
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_put(v);
-            match self.hash_tables.put(hash, v, i) {
-                Ok(idx) => (),
+            idx = match self.hash_tables.put(hash, v, i) {
+                Ok(i) => i,
                 Err(_) => panic!("Could not store vec"),
             }
         }
+        idx
     }
 
     /// Store multiple vectors in storage. Before storing the storage capacity is possibly
@@ -148,11 +150,9 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn store_vecs(&mut self, vs: &[DataPoint]) {
+    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Vec<u32> {
         self.hash_tables.increase_storage(vs.len());
-        for d in vs {
-            self.store_vec(d)
-        }
+        vs.iter().map(|x| self.store_vec(x)).collect()
     }
 
     /// Query all buckets in the hash tables. The union of the matching buckets over the `L`
