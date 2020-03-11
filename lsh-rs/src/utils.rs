@@ -11,7 +11,12 @@ pub fn l2_norm(x: ArrayView1<f32>) -> f32 {
 
 pub fn create_rng(seed: u64) -> SmallRng {
     // TODO: if seed == 0, use random seeded rng
-    SmallRng::seed_from_u64(seed)
+    if seed == 0 {
+        SmallRng::from_entropy()
+    }
+    else {
+        SmallRng::seed_from_u64(seed)
+    }
 }
 
 pub fn rand_unit_vec<RNG: Rng>(size: usize, rng: RNG) -> Vec<f32> {

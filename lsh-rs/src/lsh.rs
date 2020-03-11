@@ -14,7 +14,13 @@ pub struct LSH<T: HashTables, H: VecHash> {
     dim: usize,
     hash_tables: T,
 }
-
+/// Create a new SignRandomProjections LSH
+/// # Arguments
+///
+/// * `n_projections` - Hash length. Every projections creates a sign(random_vec.dot(p))
+/// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
+/// * `dim` - Dimensions of the data points.
+/// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
 impl LSH<MemoryTable, SignRandomProjections> {
     pub fn new_srp(
         n_projections: usize,
@@ -40,6 +46,21 @@ impl LSH<MemoryTable, SignRandomProjections> {
     }
 }
 
+/// Create a new L2 LSH
+///
+/// See hash function:
+/// https://www.cs.princeton.edu/courses/archive/spring05/cos598E/bib/p253-datar.pdf
+/// in paragraph 3.2
+///
+/// h(v) = floor(a^Tv + b / r)
+///
+/// # Arguments
+///
+/// * `n_projections` - Hash length. Every projections creates an hashed integer
+/// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
+/// * `dim` - Dimensions of the data points.
+/// * `r` - Parameter of hash function.
+/// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
 impl LSH<MemoryTable, L2> {
     pub fn new_l2(
         n_projections: usize,
@@ -66,6 +87,22 @@ impl LSH<MemoryTable, L2> {
     }
 }
 
+/// Create a new MIPS LSH
+///
+/// Async hasher
+///
+/// See hash function:
+/// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
+///
+/// # Arguments
+///
+/// * `n_projections` - Hash length. Every projections creates an hashed integer
+/// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
+/// * `dim` - Dimensions of the data points.
+/// * `r` - Parameter of hash function.
+/// * `U` - Parameter of hash function.
+/// * `m` - Parameter of hash function.
+/// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
 impl LSH<MemoryTable, MIPS> {
     pub fn new_mips(
         n_projections: usize,
