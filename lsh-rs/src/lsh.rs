@@ -105,6 +105,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     }
 
     pub fn store_vecs(&mut self, vs: &[DataPoint]) {
+        self.hash_tables.increase_storage(vs.len());
         for d in vs {
             self.store_vec(d)
         }
@@ -116,7 +117,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     /// # Arguments
     /// `v` - Query vector
     /// `dedup` - Deduplicate bucket. This requires a sort and then deduplicate. O(n log n)
-    pub fn query_bucket(&self, v: &DataPointSlice, dedup: bool) -> Vec<&DataPoint> {
+    pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
         let mut bucket_union = HashSet::default();
 
         for (i, proj) in self.hashers.iter().enumerate() {
@@ -124,7 +125,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             match self.hash_tables.query_bucket(&hash, i) {
                 Err(HashTableError::NotFound) => (),
                 Ok(bucket) => {
-                    bucket_union = bucket_union.union(bucket).cloned().collect();
+                    bucket_union = bucket_union.union(bucket).copied().collect();
                 }
                 _ => panic!("Unexpected query result"),
             }
@@ -161,11 +162,11 @@ mod test {
         let v3 = &[0.2, -0.2, 0.2];
         lhs.store_vec(v1);
         lhs.store_vec(v2);
-        assert!(lhs.query_bucket(v2, false).len() > 0);
+        assert!(lhs.query_bucket(v2).len() > 0);
 
-        let bucket_len_before = lhs.query_bucket(v1, true).len();
+        let bucket_len_before = lhs.query_bucket(v1).len();
         lhs.delete_vec(v1);
-        let bucket_len_before_after = lhs.query_bucket(v1, true).len();
+        let bucket_len_before_after = lhs.query_bucket(v1).len();
         assert!(bucket_len_before > bucket_len_before_after);
     }
 }

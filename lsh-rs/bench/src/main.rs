@@ -31,7 +31,7 @@ fn bench_query(b: &mut Bencher) {
     b.iter(|| {
         let rng = SmallRng::seed_from_u64(seed);
         let q = rand_unit_vec(100, rng);
-        lsh.query_bucket(&q, false);
+        lsh.query_bucket(&q);
         seed += 1;
     });
 }

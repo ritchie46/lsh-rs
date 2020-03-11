@@ -31,6 +31,13 @@ impl VecStore {
     fn get(&self, idx: u32) -> &DataPoint {
         &self.map[idx as usize]
     }
+
+    fn increase_storage(&mut self, size: usize) {
+        if self.map.capacity() < size {
+            let diff = size - self.map.capacity();
+            self.map.reserve(diff)
+        }
+    }
 }
 
 /// Hashtable consisting of `L` Hash tables.
@@ -56,6 +63,8 @@ pub trait HashTables {
     fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError>;
 
     fn idx_to_datapoint(&self, idx: u32) -> &DataPoint;
+
+    fn increase_storage(&mut self, size: usize);
 }
 
 pub struct MemoryTable {
@@ -131,6 +140,10 @@ impl HashTables for MemoryTable {
 
     fn idx_to_datapoint(&self, idx: u32) -> &DataPoint {
         self.vec_store.get(idx)
+    }
+
+    fn increase_storage(&mut self, size: usize) {
+        self.vec_store.increase_storage(size);
     }
 }
 
