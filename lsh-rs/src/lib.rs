@@ -7,5 +7,5 @@ pub mod lsh;
 mod table;
 pub mod utils;
 pub use crate::lsh::LSH;
-pub use hash::{SignRandomProjections, L2, MIPS};
+pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
 pub use table::MemoryTable;
