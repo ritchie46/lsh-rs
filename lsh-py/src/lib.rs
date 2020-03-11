@@ -22,11 +22,11 @@ impl LSHL2 {
         LSHL2 { lsh }
     }
     fn store_vec(&mut self, v: Vec<f32>) {
-        self.lsh.store_vec(&v)
+        self.lsh.store_vec(&v);
     }
 
     pub fn store_vecs(&mut self, vs: Vec<Vec<f32>>) {
-        self.lsh.store_vecs(&vs)
+        self.lsh.store_vecs(&vs);
     }
 
     fn query_bucket(&self, v: Vec<f32>) -> PyResult<Vec<Vec<f32>>> {
@@ -39,7 +39,7 @@ impl LSHL2 {
     }
 
     fn delete_vec(&mut self, v: Vec<f32>) {
-        self.lsh.delete_vec(&v)
+        self.lsh.delete_vec(&v);
     }
 }
 
@@ -66,11 +66,11 @@ impl LSH_MIPS {
         LSH_MIPS { lsh }
     }
     fn store_vec(&mut self, v: Vec<f32>) {
-        self.lsh.store_vec(&v)
+        self.lsh.store_vec(&v);
     }
 
     pub fn store_vecs(&mut self, vs: Vec<Vec<f32>>) {
-        self.lsh.store_vecs(&vs)
+        self.lsh.store_vecs(&vs);
     }
 
     fn query_bucket(&self, v: Vec<f32>) -> PyResult<Vec<Vec<f32>>> {
@@ -100,11 +100,11 @@ impl LSH_SRP {
         LSH_SRP { lsh }
     }
     fn store_vec(&mut self, v: Vec<f32>) {
-        self.lsh.store_vec(&v)
+        self.lsh.store_vec(&v);
     }
 
     pub fn store_vecs(&mut self, vs: Vec<Vec<f32>>) {
-        self.lsh.store_vecs(&vs)
+        self.lsh.store_vecs(&vs);
     }
 
     fn query_bucket(&self, v: Vec<f32>) -> PyResult<Vec<Vec<f32>>> {

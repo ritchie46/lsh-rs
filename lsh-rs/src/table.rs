@@ -14,7 +14,7 @@ pub enum HashTableError {
 
 /// Indexible vector storage.
 /// indexes will be stored in hashtables. The original vectors can be looked up in this data structure.
-struct VecStore {
+pub struct VecStore {
     pub map: Vec<DataPoint>,
 }
 
@@ -72,11 +72,13 @@ pub trait HashTables {
 pub struct MemoryTable {
     hash_tables: Vec<HashMap<Hash, Bucket>>,
     n_hash_tables: usize,
-    vec_store: VecStore,
+    pub vec_store: VecStore,
+    only_index_storage: bool,
+    counter: u32,
 }
 
 impl MemoryTable {
-    pub fn new(n_hash_tables: usize) -> MemoryTable {
+    pub fn new(n_hash_tables: usize, only_index_storage: bool) -> MemoryTable {
         // TODO: Check the average number of vectors in the buckets.
         // this way the capacity can be approximated by the number of DataPoints that will
         // be stored.
@@ -86,6 +88,8 @@ impl MemoryTable {
             hash_tables,
             n_hash_tables,
             vec_store: vector_store,
+            only_index_storage,
+            counter: 0,
         }
     }
 }
@@ -99,11 +103,12 @@ impl HashTables for MemoryTable {
     ) -> Result<(u32), HashTableError> {
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
-        let mut idx;
-        if hash_table == 0 {
-            idx = self.vec_store.push(d.to_vec());
-        } else {
-            idx = (self.vec_store.map.len() - 1) as u32;
+        let idx = self.counter;
+
+        if (hash_table == 0) && (!self.only_index_storage) {
+            self.vec_store.push(d.to_vec());
+        } else if (hash_table == self.n_hash_tables - 1) {
+            self.counter += 1
         }
         bucket.insert(idx);
         Ok(idx)

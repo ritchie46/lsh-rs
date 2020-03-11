@@ -11,6 +11,8 @@ pub struct LSH<T: HashTables, H: VecHash> {
     dim: usize,
     hash_tables: T,
     _seed: u64,
+    // store only indexes and no data points.
+    only_index_storage: bool,
 }
 
 impl LSH<MemoryTable, SignRandomProjections> {
@@ -29,8 +31,9 @@ impl LSH<MemoryTable, SignRandomProjections> {
             n_projections: self.n_projections,
             hashers,
             dim: self.dim,
-            hash_tables: MemoryTable::new(self.n_hash_tables),
+            hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
+            only_index_storage: self.only_index_storage,
         }
     }
 }
@@ -60,8 +63,9 @@ impl LSH<MemoryTable, L2> {
             n_projections: self.n_projections,
             hashers,
             dim: self.dim,
-            hash_tables: MemoryTable::new(self.n_hash_tables),
+            hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
+            only_index_storage: self.only_index_storage,
         }
     }
 }
@@ -93,8 +97,9 @@ impl LSH<MemoryTable, MIPS> {
             n_projections: self.n_projections,
             hashers,
             dim: self.dim,
-            hash_tables: MemoryTable::new(self.n_hash_tables),
+            hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
+            only_index_storage: self.only_index_storage,
         }
     }
 }
@@ -114,8 +119,9 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             n_projections,
             hashers: Vec::with_capacity(0),
             dim,
-            hash_tables: MemoryTable::new(n_hash_tables),
+            hash_tables: MemoryTable::new(n_hash_tables, true),
             _seed: 0,
+            only_index_storage: false,
         }
     }
 
@@ -124,6 +130,13 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     /// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
     pub fn seed(&mut self, seed: u64) -> &mut Self {
         self._seed = seed;
+        self
+    }
+
+    /// Only store indexes of data points. The mapping of data point to indexes is done outside
+    /// of the LSH struct.
+    pub fn only_index(&mut self) -> &mut Self {
+        self.only_index_storage = true;
         self
     }
 }
@@ -155,12 +168,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         vs.iter().map(|x| self.store_vec(x)).collect()
     }
 
-    /// Query all buckets in the hash tables. The union of the matching buckets over the `L`
-    /// hash tables is returned
-    ///
-    /// # Arguments
-    /// * `v` - Query vector
-    pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
+    fn query_bucket_union(&self, v: &DataPointSlice) -> HashSet<u32> {
         let mut bucket_union = HashSet::default();
 
         for (i, proj) in self.hashers.iter().enumerate() {
@@ -174,9 +182,25 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             }
         }
         bucket_union
+    }
+
+    /// Query all buckets in the hash tables. The union of the matching buckets over the `L`
+    /// hash tables is returned
+    ///
+    /// # Arguments
+    /// * `v` - Query vector
+    pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
+        let bucket_union = self.query_bucket_union(v);
+
+        bucket_union
             .iter()
             .map(|&idx| self.hash_tables.idx_to_datapoint(idx))
             .collect()
+    }
+
+    pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Vec<u32> {
+        let bucket_union = self.query_bucket_union(v);
+        bucket_union.iter().copied().collect()
     }
 
     /// Delete data point from storage. This does not free memory as the storage vector isn't resized.
@@ -215,5 +239,19 @@ mod test {
         lsh.delete_vec(v1);
         let bucket_len_before_after = lsh.query_bucket(v1).len();
         assert!(bucket_len_before > bucket_len_before_after);
+    }
+
+    #[test]
+    fn test_index_only() {
+        // Test if vec storage is increased
+        let mut lsh = LSH::new(5, 9, 3).seed(1).l2(2.);
+        let v1 = &[2., 3., 4.];
+        lsh.store_vec(v1);
+        assert_eq!(lsh.hash_tables.vec_store.map.len(), 1);
+
+        // Test if vec storage is empty
+        let mut lsh = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
+        lsh.store_vec(v1);
+        assert_eq!(lsh.hash_tables.vec_store.map.len(), 0)
     }
 }
