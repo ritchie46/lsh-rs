@@ -4,44 +4,33 @@ use crate::utils::create_rng;
 use fnv::{FnvBuildHasher, FnvHashSet as HashSet};
 use rand::{Rng, SeedableRng};
 
-///
-/// # Arguments
-///
-/// * `n_ht` - Number of hashing tables `L`.
 pub struct LSH<T: HashTables, H: VecHash> {
-    n_ht: usize,
+    n_hash_tables: usize,
+    n_projections: usize,
     hashers: Vec<H>,
     dim: usize,
     hash_tables: T,
+    _seed: u64,
 }
-/// Create a new SignRandomProjections LSH
-/// # Arguments
-///
-/// * `n_projections` - Hash length. Every projections creates a sign(random_vec.dot(p))
-/// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
-/// * `dim` - Dimensions of the data points.
-/// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
-impl LSH<MemoryTable, SignRandomProjections> {
-    pub fn new_srp(
-        n_projections: usize,
-        n_hash_tables: usize,
-        dim: usize,
-        seed: u64,
-    ) -> LSH<MemoryTable, SignRandomProjections> {
-        let mut hashers = Vec::with_capacity(n_hash_tables);
-        let mut rng = create_rng(seed);
 
-        for _ in 0..n_hash_tables {
+impl LSH<MemoryTable, SignRandomProjections> {
+    /// Create a new SignRandomProjections LSH
+    pub fn srp(&mut self) -> Self {
+        let mut rng = create_rng(self._seed);
+        let mut hashers = Vec::with_capacity(self.n_hash_tables);
+
+        for _ in 0..self.n_hash_tables {
             let seed = rng.gen();
-            let hasher = SignRandomProjections::new(n_projections, dim, seed);
+            let hasher = SignRandomProjections::new(self.n_projections, self.dim, seed);
             hashers.push(hasher);
         }
-
         LSH {
-            n_ht: n_hash_tables,
+            n_hash_tables: self.n_hash_tables,
+            n_projections: self.n_projections,
             hashers,
-            dim,
-            hash_tables: MemoryTable::new(n_hash_tables),
+            dim: self.dim,
+            hash_tables: MemoryTable::new(self.n_hash_tables),
+            _seed: self._seed,
         }
     }
 }
@@ -56,81 +45,94 @@ impl LSH<MemoryTable, SignRandomProjections> {
 ///
 /// # Arguments
 ///
-/// * `n_projections` - Hash length. Every projections creates an hashed integer
-/// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
-/// * `dim` - Dimensions of the data points.
 /// * `r` - Parameter of hash function.
-/// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
 impl LSH<MemoryTable, L2> {
-    pub fn new_l2(
-        n_projections: usize,
-        n_hash_tables: usize,
-        dim: usize,
-        r: f32,
-        seed: u64,
-    ) -> LSH<MemoryTable, L2> {
-        let mut hashers = Vec::with_capacity(n_hash_tables);
-        let mut rng = create_rng(seed);
-
-        for _ in 0..n_hash_tables {
+    pub fn l2(&mut self, r: f32) -> Self {
+        let mut rng = create_rng(self._seed);
+        let mut hashers = Vec::with_capacity(self.n_hash_tables);
+        for _ in 0..self.n_hash_tables {
             let seed = rng.gen();
-            let hasher = L2::new(dim, r, n_projections, seed);
+            let hasher = L2::new(self.dim, r, self.n_projections, seed);
             hashers.push(hasher);
         }
-
         LSH {
-            n_ht: n_hash_tables,
+            n_hash_tables: self.n_hash_tables,
+            n_projections: self.n_projections,
             hashers,
-            dim,
-            hash_tables: MemoryTable::new(n_hash_tables),
+            dim: self.dim,
+            hash_tables: MemoryTable::new(self.n_hash_tables),
+            _seed: self._seed,
         }
     }
 }
 
-/// Create a new MIPS LSH
-///
-/// Async hasher
-///
-/// See hash function:
-/// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
-///
-/// # Arguments
-///
-/// * `n_projections` - Hash length. Every projections creates an hashed integer
-/// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
-/// * `dim` - Dimensions of the data points.
-/// * `r` - Parameter of hash function.
-/// * `U` - Parameter of hash function.
-/// * `m` - Parameter of hash function.
-/// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
 impl LSH<MemoryTable, MIPS> {
-    pub fn new_mips(
-        n_projections: usize,
-        n_hash_tables: usize,
-        dim: usize,
-        r: f32,
-        U: f32,
-        m: usize,
-        seed: u64,
-    ) -> LSH<MemoryTable, MIPS> {
-        let mut hashers = Vec::with_capacity(n_hash_tables);
-        let mut rng = create_rng(seed);
+    /// Create a new MIPS LSH
+    ///
+    /// Async hasher
+    ///
+    /// See hash function:
+    /// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Parameter of hash function.
+    /// * `U` - Parameter of hash function.
+    /// * `m` - Parameter of hash function.
+    pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Self {
+        let mut rng = create_rng(self._seed);
+        let mut hashers = Vec::with_capacity(self.n_hash_tables);
 
-        for _ in 0..n_hash_tables {
+        for _ in 0..self.n_hash_tables {
             let seed = rng.gen();
-            let hasher = MIPS::new(dim, r, U, m, n_projections, seed);
+            let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
             hashers.push(hasher);
         }
         LSH {
-            n_ht: n_hash_tables,
+            n_hash_tables: self.n_hash_tables,
+            n_projections: self.n_projections,
             hashers,
-            dim,
-            hash_tables: MemoryTable::new(n_hash_tables),
+            dim: self.dim,
+            hash_tables: MemoryTable::new(self.n_hash_tables),
+            _seed: self._seed,
         }
     }
 }
 
 impl<H: VecHash> LSH<MemoryTable, H> {
+    /// Create a new Base LSH
+    ///
+    /// # Arguments
+    ///
+    /// * `n_projections` - Hash length. Every projections creates an hashed integer
+    /// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
+    /// * `dim` - Dimensions of the data points.
+
+    pub fn new(n_projections: usize, n_hash_tables: usize, dim: usize) -> Self {
+        LSH {
+            n_hash_tables,
+            n_projections,
+            hashers: Vec::with_capacity(0),
+            dim,
+            hash_tables: MemoryTable::new(n_hash_tables),
+            _seed: 0,
+        }
+    }
+
+    /// Set seed of LSH
+    /// # Arguments
+    /// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
+    pub fn seed(&mut self, seed: u64) -> &mut Self {
+        self._seed = seed;
+        self
+    }
+}
+
+impl<H: VecHash> LSH<MemoryTable, H> {
+    /// Store a single vector in storage.
+    ///
+    /// # Arguments
+    /// * `v` - Data point.
     pub fn store_vec(&mut self, v: &DataPointSlice) {
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_put(v);
@@ -141,6 +143,11 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         }
     }
 
+    /// Store multiple vectors in storage. Before storing the storage capacity is possibly
+    /// increased to match the data points.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
     pub fn store_vecs(&mut self, vs: &[DataPoint]) {
         self.hash_tables.increase_storage(vs.len());
         for d in vs {
@@ -148,12 +155,11 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         }
     }
 
-    /// Query all buckets in the hash tables. The data points in the hash tables
-    /// are added to one Vector. The final result may have (probably has) duplicates.
+    /// Query all buckets in the hash tables. The union of the matching buckets over the `L`
+    /// hash tables is returned
     ///
     /// # Arguments
-    /// `v` - Query vector
-    /// `dedup` - Deduplicate bucket. This requires a sort and then deduplicate. O(n log n)
+    /// * `v` - Query vector
     pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
         let mut bucket_union = HashSet::default();
 
@@ -173,6 +179,10 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             .collect()
     }
 
+    /// Delete data point from storage. This does not free memory as the storage vector isn't resized.
+    ///
+    /// # Arguments
+    /// * `v` - Data point
     pub fn delete_vec(&mut self, v: &DataPointSlice) {
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
@@ -193,17 +203,17 @@ mod test {
 
     #[test]
     fn test_hash_table() {
-        let mut lhs: LSH<MemoryTable, SignRandomProjections> = LSH::new_srp(5, 10, 3, 1);
+        let mut lsh = LSH::new(5, 10, 3).seed(1).srp();
         let v1 = &[2., 3., 4.];
         let v2 = &[-1., -1., 1.];
         let v3 = &[0.2, -0.2, 0.2];
-        lhs.store_vec(v1);
-        lhs.store_vec(v2);
-        assert!(lhs.query_bucket(v2).len() > 0);
+        lsh.store_vec(v1);
+        lsh.store_vec(v2);
+        assert!(lsh.query_bucket(v2).len() > 0);
 
-        let bucket_len_before = lhs.query_bucket(v1).len();
-        lhs.delete_vec(v1);
-        let bucket_len_before_after = lhs.query_bucket(v1).len();
+        let bucket_len_before = lsh.query_bucket(v1).len();
+        lsh.delete_vec(v1);
+        let bucket_len_before_after = lsh.query_bucket(v1).len();
         assert!(bucket_len_before > bucket_len_before_after);
     }
 }

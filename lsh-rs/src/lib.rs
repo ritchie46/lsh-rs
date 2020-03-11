@@ -6,6 +6,6 @@ mod hash;
 pub mod lsh;
 mod table;
 pub mod utils;
+pub use crate::lsh::LSH;
 pub use hash::{SignRandomProjections, L2, MIPS};
-pub use lsh::LSH;
 pub use table::MemoryTable;

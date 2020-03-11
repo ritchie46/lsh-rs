@@ -18,7 +18,7 @@ struct LSHL2 {
 impl LSHL2 {
     #[new]
     fn new(n_projections: usize, n_hash_tables: usize, dim: usize, r: f32, seed: u64) -> Self {
-        let lsh = LSH::new_l2(n_projections, n_hash_tables, dim, r, seed);
+        let lsh = LSH::new(n_projections, n_hash_tables, dim).seed(seed).l2(r);
         LSHL2 { lsh }
     }
     fn store_vec(&mut self, v: Vec<f32>) {
@@ -60,7 +60,9 @@ impl LSH_MIPS {
         m: usize,
         seed: u64,
     ) -> Self {
-        let lsh = LSH::new_mips(n_projections, n_hash_tables, dim, r, U, m, seed);
+        let lsh = LSH::new(n_projections, n_hash_tables, dim)
+            .seed(seed)
+            .mips(r, U, m);
         LSH_MIPS { lsh }
     }
     fn store_vec(&mut self, v: Vec<f32>) {
@@ -94,7 +96,7 @@ struct LSH_SRP {
 impl LSH_SRP {
     #[new]
     fn new(n_projections: usize, n_hash_tables: usize, dim: usize, seed: u64) -> Self {
-        let lsh = LSH::new_srp(n_projections, n_hash_tables, dim, seed);
+        let lsh = LSH::new(n_projections, n_hash_tables, dim).seed(seed).srp();
         LSH_SRP { lsh }
     }
     fn store_vec(&mut self, v: Vec<f32>) {

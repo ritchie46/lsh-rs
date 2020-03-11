@@ -13,8 +13,7 @@ pub fn create_rng(seed: u64) -> SmallRng {
     // TODO: if seed == 0, use random seeded rng
     if seed == 0 {
         SmallRng::from_entropy()
-    }
-    else {
+    } else {
         SmallRng::seed_from_u64(seed)
     }
 }
