@@ -14,10 +14,10 @@
 //! ## Getting started
 //!
 //! ```
-//! use lsh::LSH;
+//! use lsh_rs::LSH;
 //! // 2 rows w/ dimension 3.
-//! let p = &[[1., 1.5, 2.],
-//!         [2., 1.1, -0.3]];
+//! let p = &[vec![1., 1.5, 2.],
+//!         vec![2., 1.1, -0.3]];
 //!
 //! // Do one time expensive preprocessing.
 //! let n_projections = 9;
@@ -85,7 +85,7 @@
 //! # Or any other blas backend.
 //! blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]}
 //! ```
-#![allow(dead_code)]
+#![allow(dead_code, non_snake_case)]
 #[cfg(feature = "blas")]
 extern crate blas_src;
 extern crate ndarray;
@@ -96,4 +96,3 @@ pub mod utils;
 pub use crate::lsh::LSH;
 pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
 pub use table::MemoryTable;
-

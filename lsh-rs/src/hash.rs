@@ -1,6 +1,5 @@
-use crate::utils::{create_rng, l2_norm, rand_unit_vec};
+use crate::utils::{create_rng, l2_norm};
 use ndarray::prelude::*;
-use ndarray::{aview1, Array, Array1, Array2, Axis};
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use rand::Rng;
@@ -69,7 +68,7 @@ impl L2 {
         let mut rng = create_rng(seed);
         let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
         let uniform_dist = Uniform::new(0., r);
-        let b = Array::random_using((n_projections), uniform_dist, &mut rng);
+        let b = Array::random_using(n_projections, uniform_dist, &mut rng);
 
         L2 {
             a,

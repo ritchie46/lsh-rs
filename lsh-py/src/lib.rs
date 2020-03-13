@@ -1,4 +1,4 @@
-use lsh::{MemoryTable, SignRandomProjections, L2, LSH, MIPS};
+use lsh_rs::{MemoryTable, SignRandomProjections, L2, LSH, MIPS};
 use pyo3::prelude::*;
 
 #[pymodule]

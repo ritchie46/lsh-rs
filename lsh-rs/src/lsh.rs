@@ -1,8 +1,8 @@
-use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
-use crate::table::{Bucket, DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
+use crate::hash::{SignRandomProjections, VecHash, L2, MIPS};
+use crate::table::{DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
 use crate::utils::create_rng;
-use fnv::{FnvBuildHasher, FnvHashSet as HashSet};
-use rand::{Rng, SeedableRng};
+use fnv::FnvHashSet as HashSet;
+use rand::Rng;
 
 /// Wrapper for LSH functionality.
 pub struct LSH<T: HashTables, H: VecHash> {
@@ -38,7 +38,6 @@ impl LSH<MemoryTable, SignRandomProjections> {
         }
     }
 }
-
 
 impl LSH<MemoryTable, L2> {
     /// Create a new L2 LSH
@@ -237,17 +236,10 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_simhash() {
-        // Only test if it runs
-        let h = SignRandomProjections::new(5, 3, 1);
-    }
-
-    #[test]
     fn test_hash_table() {
         let mut lsh = LSH::new(5, 10, 3).seed(1).srp();
         let v1 = &[2., 3., 4.];
         let v2 = &[-1., -1., 1.];
-        let v3 = &[0.2, -0.2, 0.2];
         lsh.store_vec(v1);
         lsh.store_vec(v2);
         assert!(lsh.query_bucket(v2).len() > 0);

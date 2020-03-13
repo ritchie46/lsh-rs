@@ -49,7 +49,7 @@ pub trait HashTables {
         hash: Hash,
         d: &DataPointSlice,
         hash_table: usize,
-    ) -> Result<(u32), HashTableError>;
+    ) -> Result<u32, HashTableError>;
 
     fn delete(
         &mut self,
@@ -60,9 +60,6 @@ pub trait HashTables {
 
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
-
-    /// Query the most similar
-    fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError>;
 
     fn idx_to_datapoint(&self, idx: u32) -> &DataPoint;
 
@@ -101,14 +98,14 @@ impl HashTables for MemoryTable {
         hash: Hash,
         d: &DataPointSlice,
         hash_table: usize,
-    ) -> Result<(u32), HashTableError> {
+    ) -> Result<u32, HashTableError> {
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
         let idx = self.counter;
 
         if (hash_table == 0) && (!self.only_index_storage) {
             self.vec_store.push(d.to_vec());
-        } else if (hash_table == self.n_hash_tables - 1) {
+        } else if hash_table == self.n_hash_tables - 1 {
             self.counter += 1
         }
         bucket.insert(idx);
@@ -149,11 +146,6 @@ impl HashTables for MemoryTable {
             None => Err(HashTableError::NotFound),
             Some(bucket) => Ok(bucket),
         }
-    }
-
-    /// Query the most similar
-    fn query(&self, distance_fn: &dyn Fn(DataPoint) -> f32) -> Result<DataPoint, HashTableError> {
-        Err(HashTableError::Failed)
     }
 
     fn idx_to_datapoint(&self, idx: u32) -> &DataPoint {
