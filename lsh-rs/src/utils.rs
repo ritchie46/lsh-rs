@@ -1,7 +1,7 @@
 use ndarray::ArrayView1;
 use num::Zero;
 use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use rand::{thread_rng, Rng, SeedableRng};
 use rand_distr::StandardNormal;
 use std::ops::{Add, Mul};
 
@@ -19,7 +19,10 @@ pub fn l2_norm(x: ArrayView1<f32>) -> f32 {
 pub fn create_rng(seed: u64) -> SmallRng {
     // TODO: if seed == 0, use random seeded rng
     if seed == 0 {
-        SmallRng::from_entropy()
+        match SmallRng::from_rng(thread_rng()) {
+            Ok(rng) => rng,
+            Err(_) => SmallRng::from_entropy(),
+        }
     } else {
         SmallRng::seed_from_u64(seed)
     }

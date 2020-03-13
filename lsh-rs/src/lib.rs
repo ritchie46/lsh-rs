@@ -13,7 +13,7 @@
 //!
 //! ## Getting started
 //!
-//! ```
+//! ```rust
 //! use lsh_rs::LSH;
 //! // 2 rows w/ dimension 3.
 //! let p = &[vec![1., 1.5, 2.],
@@ -33,7 +33,7 @@
 //!
 //! ## Signed Random Projections
 //! LSH for maximum cosine similarity search.
-//! ```
+//! ```rust
 //! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).srp();
 //! ```
 //!
@@ -48,7 +48,7 @@
 //!
 //! ## Maximum Inner Product (MIPS)
 //! LSH for maximum inner product search.
-//! ```
+//! ```rust
 //! let bucket_width = 2.2;
 //! // l2(x) < U < 1.0
 //! let U = 0.83;
@@ -61,7 +61,7 @@
 //! Random projections are used to generate the hash functions. The default seeding of randomness
 //! is taken from the system. If you want to have reproducable outcomes, you can set a manual seed.
 //!
-//! ```
+//! ```rust
 //! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).seed(12).srp();
 //! ```
 //!
@@ -69,7 +69,7 @@
 //! Instead of storing data points as vectors. Storing `L` copies of the data points (one in every
 //! hash table). You can choose to only store unique indexes of the data points. The index ids are
 //! assigned in chronological order. This will drastically decrease the required memory.
-//! ```
+//! ```rust
 //! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).only_index().srp();
 //! ```
 //!
@@ -79,7 +79,7 @@
 //!  <br>
 //!  <br>
 //! **Cargo.toml:**
-//! ```text
+//! ```toml
 //! lsh-rs = {version ="x.x"}, features=["blas"]}
 //! ndarray = {version = "0.13", features=["blas"]}
 //! # Or any other blas backend.
@@ -91,6 +91,7 @@ extern crate blas_src;
 extern crate ndarray;
 mod hash;
 mod lsh;
+mod multi_probe;
 mod table;
 pub mod utils;
 pub use crate::lsh::LSH;

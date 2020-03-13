@@ -1,19 +1,32 @@
-use crate::hash::{SignRandomProjections, VecHash, L2, MIPS};
+use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
+use crate::multi_probe::create_hash_permutation;
 use crate::table::{DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
 use crate::utils::create_rng;
 use fnv::FnvHashSet as HashSet;
+use rand::distributions::Uniform;
 use rand::Rng;
 
 /// Wrapper for LSH functionality.
 pub struct LSH<T: HashTables, H: VecHash> {
+    /// Number of hash tables. `M` in literature.
     n_hash_tables: usize,
+    /// Number of hash functions. `K` in literature.
     n_projections: usize,
+    /// Hash functions.
     hashers: Vec<H>,
+    /// Dimensions of p and q
     dim: usize,
+    /// Storage data structure
     hash_tables: T,
+    /// seed for hash functions. If 0, randomness is seeded from the os.
     _seed: u64,
-    // store only indexes and no data points.
+    /// store only indexes and no data points.
     only_index_storage: bool,
+    _multi_probe: bool,
+    /// Number of (optional) changing bits per hash.
+    _multi_probe_n_perturbations: usize,
+    /// Length of probing sequence
+    _multi_probe_n_probes: usize,
 }
 
 impl LSH<MemoryTable, SignRandomProjections> {
@@ -35,6 +48,9 @@ impl LSH<MemoryTable, SignRandomProjections> {
             hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
             only_index_storage: self.only_index_storage,
+            _multi_probe: self._multi_probe,
+            _multi_probe_n_perturbations: self._multi_probe_n_perturbations,
+            _multi_probe_n_probes: self._multi_probe_n_probes,
         }
     }
 }
@@ -67,6 +83,9 @@ impl LSH<MemoryTable, L2> {
             hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
             only_index_storage: self.only_index_storage,
+            _multi_probe: self._multi_probe,
+            _multi_probe_n_perturbations: self._multi_probe_n_perturbations,
+            _multi_probe_n_probes: self._multi_probe_n_probes,
         }
     }
 }
@@ -101,6 +120,9 @@ impl LSH<MemoryTable, MIPS> {
             hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
             only_index_storage: self.only_index_storage,
+            _multi_probe: self._multi_probe,
+            _multi_probe_n_perturbations: self._multi_probe_n_perturbations,
+            _multi_probe_n_probes: self._multi_probe_n_probes,
         }
     }
 }
@@ -123,6 +145,9 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             hash_tables: MemoryTable::new(n_hash_tables, true),
             _seed: 0,
             only_index_storage: false,
+            _multi_probe: false,
+            _multi_probe_n_perturbations: 3,
+            _multi_probe_n_probes: 16,
         }
     }
 
@@ -138,6 +163,18 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     /// of the LSH struct.
     pub fn only_index(&mut self) -> &mut Self {
         self.only_index_storage = true;
+        self
+    }
+
+    /// Enable multi-probing LSH and set multi-probing parameters.
+    ///
+    /// # Arguments
+    /// * `n_probes` - The length of the probing sequence.
+    /// * `n_permutations` - The upper bounds of bits that may shift per hash.
+    pub fn multi_probe(&mut self, n_probes: usize, n_permutations: usize) -> &mut Self {
+        self._multi_probe = true;
+        self._multi_probe_n_perturbations = n_permutations;
+        self._multi_probe_n_probes = n_probes;
         self
     }
 }
@@ -157,7 +194,8 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     pub fn store_vec(&mut self, v: &DataPointSlice) -> u32 {
         let mut idx = 0;
         for (i, proj) in self.hashers.iter().enumerate() {
-            let hash = proj.hash_vec_put(v);
+            let mut hash = proj.hash_vec_put(v);
+            hash.shrink_to_fit();
             idx = match self.hash_tables.put(hash, v, i) {
                 Ok(i) => i,
                 Err(_) => panic!("Could not store vec"),
@@ -185,17 +223,15 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     }
 
     fn query_bucket_union(&self, v: &DataPointSlice) -> HashSet<u32> {
+        if self._multi_probe {
+            return self.multi_probe_bucket_union(v);
+        }
+
         let mut bucket_union = HashSet::default();
 
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
-            match self.hash_tables.query_bucket(&hash, i) {
-                Err(HashTableError::NotFound) => (),
-                Ok(bucket) => {
-                    bucket_union = bucket_union.union(bucket).copied().collect();
-                }
-                _ => panic!("Unexpected query result"),
-            }
+            self.process_bucket_union_result(&hash, i, &mut bucket_union)
         }
         bucket_union
     }
@@ -214,6 +250,11 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             .collect()
     }
 
+    /// Query all buckets in the hash tables and return the data point indexes. The union of the
+    /// matching buckets of `L` hash tables is returned.
+    ///
+    /// # Arguments
+    /// * `v` - Query vector
     pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Vec<u32> {
         let bucket_union = self.query_bucket_union(v);
         bucket_union.iter().copied().collect()
@@ -228,6 +269,51 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             let hash = proj.hash_vec_query(v);
             self.hash_tables.delete(hash, v, i).unwrap_or_default();
         }
+    }
+
+    fn process_bucket_union_result(
+        &self,
+        hash: &Hash,
+        hash_table_idx: usize,
+        bucket_union: &mut HashSet<u32>,
+    ) {
+        match self.hash_tables.query_bucket(hash, hash_table_idx) {
+            Err(HashTableError::NotFound) => (),
+            Ok(bucket) => {
+                *bucket_union = bucket_union.union(bucket).copied().collect();
+            }
+            _ => panic!("Unexpected query result"),
+        };
+    }
+
+    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> HashSet<u32> {
+        let mut probing_seq = HashSet::with_capacity_and_hasher(
+            self._multi_probe_n_probes,
+            fnv::FnvBuildHasher::default(),
+        );
+        for _ in 0..self._multi_probe_n_probes {
+            probing_seq.insert(create_hash_permutation(
+                self.n_projections,
+                self._multi_probe_n_perturbations,
+            ));
+        }
+
+        let mut bucket_union = HashSet::default();
+        for (i, proj) in self.hashers.iter().enumerate() {
+            // fist process the original query
+            let original_hash = proj.hash_vec_query(v);
+            self.process_bucket_union_result(&original_hash, i, &mut bucket_union);
+
+            for pertub in &probing_seq {
+                let hash = original_hash
+                    .iter()
+                    .zip(pertub)
+                    .map(|(&a, &b)| a + b)
+                    .collect();
+                self.process_bucket_union_result(&hash, i, &mut bucket_union);
+            }
+        }
+        bucket_union
     }
 }
 

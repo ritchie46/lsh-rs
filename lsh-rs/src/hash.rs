@@ -4,7 +4,7 @@ use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use rand::Rng;
 
-pub type Hash = String;
+pub type Hash = Vec<i32>;
 
 pub trait VecHash {
     fn hash_vec_query(&self, v: &[f32]) -> Hash;
@@ -32,13 +32,13 @@ impl SignRandomProjections {
     }
 
     fn hash_vec(&self, v: &[f32]) -> Hash {
-        let mut hash: Vec<char> = vec!['0'; self.hyperplanes.len_of(Axis(1))];
+        let mut hash: Vec<i32> = vec![0; self.hyperplanes.len_of(Axis(1))];
 
         let v = aview1(v);
 
         for (i, ai) in self.hyperplanes.t().dot(&v).iter().enumerate() {
             if ai > &0.0 {
-                hash[i] = '1'
+                hash[i] = 1
             }
         }
         hash.into_iter().collect()
@@ -81,12 +81,7 @@ impl L2 {
     fn hash_vec(&self, v: &[f32]) -> Hash {
         let h = (self.a.dot(&aview1(v)) + &self.b) / self.r;
         let h = h.map(|x| x.floor() as i32);
-
-        let mut s = String::with_capacity(h.len() * 3);
-        for x in h.iter() {
-            s.push_str(&x.to_string())
-        }
-        s
+        h.iter().copied().collect()
     }
 }
 
@@ -195,7 +190,7 @@ mod test {
         // a distant vec
         let h3 = l2.hash_vec_query(&[100., 100., 100., 100., 100.1]);
 
-        println!("close: {:?} distant: {}", (&h1, &h2), &h3);
+        println!("close: {:?} distant: {:?}", (&h1, &h2), &h3);
         assert_eq!(h1, h2);
         assert_ne!(h1, h3);
     }
