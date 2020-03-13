@@ -4,6 +4,7 @@ use crate::utils::create_rng;
 use fnv::{FnvBuildHasher, FnvHashSet as HashSet};
 use rand::{Rng, SeedableRng};
 
+/// Wrapper for LSH functionality.
 pub struct LSH<T: HashTables, H: VecHash> {
     n_hash_tables: usize,
     n_projections: usize,
@@ -38,18 +39,19 @@ impl LSH<MemoryTable, SignRandomProjections> {
     }
 }
 
-/// Create a new L2 LSH
-///
-/// See hash function:
-/// https://www.cs.princeton.edu/courses/archive/spring05/cos598E/bib/p253-datar.pdf
-/// in paragraph 3.2
-///
-/// h(v) = floor(a^Tv + b / r)
-///
-/// # Arguments
-///
-/// * `r` - Parameter of hash function.
+
 impl LSH<MemoryTable, L2> {
+    /// Create a new L2 LSH
+    ///
+    /// See hash function:
+    /// https://www.cs.princeton.edu/courses/archive/spring05/cos598E/bib/p253-datar.pdf
+    /// in paragraph 3.2
+    ///
+    /// h(v) = floor(a^Tv + b / r)
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Parameter of hash function.
     pub fn l2(&mut self, r: f32) -> Self {
         let mut rng = create_rng(self._seed);
         let mut hashers = Vec::with_capacity(self.n_hash_tables);
@@ -146,6 +148,13 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     ///
     /// # Arguments
     /// * `v` - Data point.
+    ///
+    /// # Examples
+    /// ```
+    ///let mut lsh = LSH::new(5, 10, 3).srp();
+    ///let v = &[2., 3., 4.];
+    ///let id = lsh.store_vec(v);
+    /// ```
     pub fn store_vec(&mut self, v: &DataPointSlice) -> u32 {
         let mut idx = 0;
         for (i, proj) in self.hashers.iter().enumerate() {
@@ -163,6 +172,14 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
+    ///
+    /// # Examples
+    ///```
+    ///let mut lsh = LSH::new(5, 10, 3).srp();
+    ///let vs = &[[2., 3., 4.],
+    ///           [-1., -1., 1.]];
+    ///let ids = lsh.store_vecs(vs);
+    /// ```
     pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Vec<u32> {
         self.hash_tables.increase_storage(vs.len());
         vs.iter().map(|x| self.store_vec(x)).collect()

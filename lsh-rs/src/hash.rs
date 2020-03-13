@@ -6,7 +6,6 @@ use ndarray_rand::RandomExt;
 use rand::Rng;
 
 pub type Hash = String;
-type HyperPlanes = Array2<f32>;
 
 pub trait VecHash {
     fn hash_vec_query(&self, v: &[f32]) -> Hash;
@@ -14,11 +13,10 @@ pub trait VecHash {
 }
 
 /// Also called SimHash.
-/// An LSH for the cosine similarity
-/// # Arguments
-/// * `hyperplanes` - Unit vectors that creates buckets of the data points.
+/// A family of hashers for the cosine similarity.
 pub struct SignRandomProjections {
-    hyperplanes: HyperPlanes,
+    ///  Random unit vectors that will lead to the bits of the hash.
+    hyperplanes: Array2<f32>,
 }
 
 impl SignRandomProjections {
@@ -58,8 +56,8 @@ impl VecHash for SignRandomProjections {
     }
 }
 
+/// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
 pub struct L2 {
-    // https://arxiv.org/pdf/1411.3787.pdf
     a: Array2<f32>,
     r: f32,
     b: Array1<f32>,
@@ -103,8 +101,8 @@ impl VecHash for L2 {
     }
 }
 
+/// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
 pub struct MIPS {
-    // https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf
     U: f32,
     M: f32,
     m: usize,

@@ -8,3 +8,6 @@ test:
 
 python-lib:
 	@cd lsh-py && cargo +nightly build --release && cd .. && cp target/release/liblshpy.so lshpy.so
+
+doc:
+	@cd lsh-rs && cargo doc --open

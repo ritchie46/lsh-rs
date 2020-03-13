@@ -69,6 +69,7 @@ pub trait HashTables {
     fn increase_storage(&mut self, size: usize);
 }
 
+/// In memory storage of hashed vectors/ indexes.
 pub struct MemoryTable {
     hash_tables: Vec<HashMap<Hash, Bucket>>,
     n_hash_tables: usize,
