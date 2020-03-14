@@ -5,6 +5,8 @@ use crate::utils::create_rng;
 use fnv::FnvHashSet as HashSet;
 use rand::distributions::Uniform;
 use rand::Rng;
+use std::fs::File;
+use std::path::Path;
 
 /// Wrapper for LSH functionality.
 pub struct LSH<T: HashTables, H: VecHash> {
@@ -315,6 +317,18 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         }
         bucket_union
     }
+
+    pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        // TODO: add hash functions to dump
+        let f = File::create(path)?;
+        serde_cbor::to_writer(f, &self.hash_tables)?;
+        Ok(())
+    }
+    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        let f = File::open(path)?;
+        self.hash_tables = serde_cbor::from_reader(f)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -348,5 +362,21 @@ mod test {
         let mut lsh = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
         lsh.store_vec(v1);
         assert_eq!(lsh.hash_tables.vec_store.map.len(), 0)
+    }
+
+    #[test]
+    fn test_serialization() {
+        let mut lsh = LSH::new(5, 9, 3).seed(1).l2(2.);
+        let v1 = &[2., 3., 4.];
+        lsh.store_vec(v1);
+        let mut tmp = std::env::temp_dir();
+        tmp.push("lsh");
+        std::fs::create_dir(&tmp);
+        tmp.push("serialized.cbor");
+        assert!(lsh.dump(&tmp).is_ok());
+
+        // load from file
+        assert!(lsh.load(&tmp).is_ok());
+        println!("{:?}", lsh.hash_tables)
     }
 }

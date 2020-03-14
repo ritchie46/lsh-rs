@@ -2,6 +2,7 @@ use crate::hash::Hash;
 use crate::utils::{all_eq, increase_capacity};
 use fnv::FnvHashMap as HashMap;
 use fnv::FnvHashSet as HashSet;
+use serde::{Deserialize, Serialize};
 
 pub type DataPoint = Vec<f32>;
 pub type DataPointSlice = [f32];
@@ -14,6 +15,7 @@ pub enum HashTableError {
 
 /// Indexible vector storage.
 /// indexes will be stored in hashtables. The original vectors can be looked up in this data structure.
+#[derive(Debug, Deserialize, Serialize)]
 pub struct VecStore {
     pub map: Vec<DataPoint>,
 }
@@ -67,6 +69,7 @@ pub trait HashTables {
 }
 
 /// In memory storage of hashed vectors/ indexes.
+#[derive(Deserialize, Serialize)]
 pub struct MemoryTable {
     hash_tables: Vec<HashMap<Hash, Bucket>>,
     n_hash_tables: usize,

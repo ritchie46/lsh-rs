@@ -20,6 +20,8 @@ rand_distr = "0.2"
 num = "0.2"
 fnv = "1.0.6"
 ndarray-rand = "0.11.0"
+serde_cbor = "0.11.1"
+serde = { version="1.0.104", features=["derive"] }
 
 [lib]
 name = "lsh_rs"
