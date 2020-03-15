@@ -13,7 +13,7 @@ repository = "https://github.com/ritchie46/lsh-rs"
 blas = ["blas-src"]
 
 [dependencies]
-ndarray = {version = "0.13"}
+ndarray = {version = "0.13", features=["serde"]}
 blas-src = { version = "0.5", defeault-features = false, optional = true}
 rand = {version = "0.7", features = ["small_rng"]}
 rand_distr = "0.2"

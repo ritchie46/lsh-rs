@@ -3,6 +3,7 @@ use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 pub type Hash = Vec<i32>;
 
@@ -13,6 +14,7 @@ pub trait VecHash {
 
 /// Also called SimHash.
 /// A family of hashers for the cosine similarity.
+#[derive(Serialize, Deserialize)]
 pub struct SignRandomProjections {
     ///  Random unit vectors that will lead to the bits of the hash.
     hyperplanes: Array2<f32>,
@@ -56,6 +58,7 @@ impl VecHash for SignRandomProjections {
 }
 
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
+#[derive(Serialize, Deserialize)]
 pub struct L2 {
     a: Array2<f32>,
     r: f32,
@@ -96,6 +99,7 @@ impl VecHash for L2 {
 }
 
 /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
+#[derive(Serialize, Deserialize)]
 pub struct MIPS {
     U: f32,
     M: f32,

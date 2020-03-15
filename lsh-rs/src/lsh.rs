@@ -5,6 +5,8 @@ use crate::utils::create_rng;
 use fnv::FnvHashSet as HashSet;
 use rand::distributions::Uniform;
 use rand::Rng;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::path::Path;
 
@@ -317,16 +319,48 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         }
         bucket_union
     }
+}
 
+/// Intermediate data structure for serialization. Only contains the absolute
+/// necessities for reproducible results.
+#[derive(Serialize, Deserialize)]
+struct CborBin {
+    hash_tables: Vec<u8>,
+    hashers: Vec<u8>,
+    n_hash_tables: usize,
+    n_projections: usize,
+    dim: usize,
+    _seed: u64,
+}
+
+impl<H: Serialize + DeserializeOwned + VecHash> LSH<MemoryTable, H> {
     pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
-        // TODO: add hash functions to dump
         let f = File::create(path)?;
-        serde_cbor::to_writer(f, &self.hash_tables)?;
+
+        let hash_tables = serde_cbor::to_vec(&self.hash_tables)?;
+        let hashers = serde_cbor::to_vec(&self.hashers)?;
+        let cborbin = CborBin {
+            hash_tables,
+            hashers,
+            n_hash_tables: self.n_hash_tables,
+            n_projections: self.n_projections,
+            dim: self.dim,
+            _seed: self._seed,
+        };
+
+        serde_cbor::to_writer(f, &cborbin)?;
         Ok(())
     }
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let f = File::open(path)?;
-        self.hash_tables = serde_cbor::from_reader(f)?;
+        let cborbin: CborBin = serde_cbor::from_reader(f)?;
+        self.hash_tables = serde_cbor::from_slice(&cborbin.hash_tables)?;
+        self.hashers = serde_cbor::from_slice(&cborbin.hashers)?;
+        self.n_hash_tables = cborbin.n_hash_tables;
+        self.n_projections = cborbin.n_projections;
+        self.dim = cborbin.dim;
+        self._seed = cborbin._seed;
+
         Ok(())
     }
 }
@@ -376,7 +410,9 @@ mod test {
         assert!(lsh.dump(&tmp).is_ok());
 
         // load from file
-        assert!(lsh.load(&tmp).is_ok());
+        let res = lsh.load(&tmp);
+        println!("{:?}", res);
+        assert!(res.is_ok());
         println!("{:?}", lsh.hash_tables)
     }
 }
