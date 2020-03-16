@@ -4,5 +4,6 @@
 members = [
     "lsh-rs",
     "lsh-rs/bench",
-    "lsh-py"
+    "lsh-py",
+    "examples/reverse-img-search"
 ]
