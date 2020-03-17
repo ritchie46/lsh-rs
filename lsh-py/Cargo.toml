@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 pyo3 = { version="0.9.0-alpha.1", features = ["extension-module"] }
 lsh-rs = {path = "../lsh-rs", features=["blas"]}
-ndarray = {version = "0.13", features=["blas"]}
 blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]}
 
 [lib]

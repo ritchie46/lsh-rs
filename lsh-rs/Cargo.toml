@@ -10,7 +10,7 @@ repository = "https://github.com/ritchie46/lsh-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 # also add blas in ndarray. See Cargo.toml of bench for that.
-blas = ["blas-src"]
+blas = ["blas-src", "ndarray/blas"]
 
 [dependencies]
 ndarray = {version = "0.13", features=["serde"]}
@@ -20,8 +20,8 @@ rand_distr = "0.2"
 num = "0.2"
 fnv = "1.0.6"
 ndarray-rand = "0.11.0"
-serde_cbor = "0.11.1"
-serde = { version="1.0.104", features=["derive"] }
+serde_cbor = { version = "0.11.1" }
+serde = { version = "1.0.104", features = ["derive"] }
 
 [lib]
 name = "lsh_rs"

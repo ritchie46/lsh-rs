@@ -76,13 +76,12 @@
 
  ## BLAS support
  Utilizing [BLAS](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) will heavily increase
- performance. To make use of BLAS, install `lsh-rs` w/ `"blas"` feature and reinstall `ndarray` w/ `"blas"` support.
+ performance. To make use of BLAS, install `lsh-rs` w/ `"blas"` feature and install `blas-src` with your blas backend.
   <br>
   <br>
  **Cargo.toml:**
  ```toml
  lsh-rs = {version ="x.x"}, features=["blas"]}
- ndarray = {version = "0.13", features=["blas"]}
  # Or any other blas backend.
- blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]}
+ blas-src = { version = "0.5", defeault-features = false, featugres = ["openblas"]}
  ```
