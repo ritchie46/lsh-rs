@@ -97,3 +97,5 @@ pub mod utils;
 pub use crate::lsh::LSH;
 pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
 pub use table::MemoryTable;
+#[cfg(feature = "stats")]
+mod stats;

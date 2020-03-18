@@ -11,6 +11,7 @@ repository = "https://github.com/ritchie46/lsh-rs"
 [features]
 # also add blas in ndarray. See Cargo.toml of bench for that.
 blas = ["blas-src", "ndarray/blas"]
+stats = ["statrs"]
 
 [dependencies]
 ndarray = {version = "0.13", features=["serde"]}
@@ -22,6 +23,7 @@ fnv = "1.0.6"
 ndarray-rand = "0.11.0"
 serde_cbor = { version = "0.11.1" }
 serde = { version = "1.0.104", features = ["derive"] }
+statrs = { version = "0.12.0", optional = true}
 
 [lib]
 name = "lsh_rs"
