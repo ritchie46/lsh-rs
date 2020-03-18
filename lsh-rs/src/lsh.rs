@@ -181,6 +181,15 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         self._multi_probe_n_probes = n_probes;
         self
     }
+
+    pub fn increase_storage(&mut self, upper_bound: usize) -> &mut Self {
+        self.hash_tables.increase_storage(upper_bound);
+        self
+    }
+
+    pub fn describe(&self) {
+        self.hash_tables.describe();
+    }
 }
 
 impl<H: VecHash> LSH<MemoryTable, H> {

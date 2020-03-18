@@ -66,6 +66,8 @@ pub trait HashTables {
     fn idx_to_datapoint(&self, idx: u32) -> &DataPoint;
 
     fn increase_storage(&mut self, size: usize);
+
+    fn describe(&self);
 }
 
 /// In memory storage of hashed vectors/ indexes.
@@ -158,6 +160,31 @@ impl HashTables for MemoryTable {
     fn increase_storage(&mut self, size: usize) {
         increase_capacity(size, &mut self.hash_tables);
         self.vec_store.increase_storage(size);
+    }
+
+    fn describe(&self) {
+        let mut lengths = vec![];
+        let mut max_len = 0;
+        let mut min_len = 1000000;
+        for map in self.hash_tables.iter() {
+            for (_, v) in map.iter() {
+                let len = v.len();
+                lengths.push(len);
+                if len > max_len {
+                    max_len = len
+                }
+                if len < min_len {
+                    min_len = len
+                }
+            }
+        }
+
+        println!(
+            "Bucket lengths: max: {}, min: {}, avg: {}",
+            max_len,
+            min_len,
+            lengths.iter().sum::<usize>() as f32 / lengths.len() as f32
+        )
     }
 }
 
