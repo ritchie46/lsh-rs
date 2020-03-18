@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lsh-rs = {path = "../../lsh-rs", features=["blas"]}
-ndarray = {version = "0.13", features=["blas"]}
+lsh-rs = {path = "../../lsh-rs", features=["blas", "stats"]}
 blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]}
+ndarray = {version = "0.13", features=["blas", "rayon"]}
 image = "0.23.1"
 serde_cbor = "0.11.1"
 serde = { version="1.0.104" }
