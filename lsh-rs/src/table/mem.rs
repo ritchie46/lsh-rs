@@ -1,18 +1,11 @@
+use super::general::{Bucket, HashTableError, HashTables};
 use crate::hash::Hash;
 use crate::utils::{all_eq, increase_capacity};
+use crate::{DataPoint, DataPointSlice};
 use fnv::FnvHashMap as HashMap;
 use fnv::FnvHashSet as HashSet;
 use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
-
-pub type DataPoint = Vec<f32>;
-pub type DataPointSlice = [f32];
-/// Bucket contains indexes to VecStore
-pub type Bucket = HashSet<u32>;
-pub enum HashTableError {
-    Failed,
-    NotFound,
-}
 
 /// Indexible vector storage.
 /// indexes will be stored in hashtables. The original vectors can be looked up in this data structure.
@@ -38,37 +31,6 @@ impl VecStore {
     fn increase_storage(&mut self, size: usize) {
         increase_capacity(size, &mut self.map);
     }
-}
-
-/// Hashtable consisting of `L` Hash tables.
-pub trait HashTables {
-    /// # Arguments
-    ///
-    /// * `hash` - hashed vector.
-    /// * `d` - Vector to store in the buckets.
-    /// * `hash_table` - Number of the hash_table to store the vector. Ranging from 0 to L.
-    fn put(
-        &mut self,
-        hash: Hash,
-        d: &DataPointSlice,
-        hash_table: usize,
-    ) -> Result<u32, HashTableError>;
-
-    fn delete(
-        &mut self,
-        hash: Hash,
-        d: &DataPointSlice,
-        hash_table: usize,
-    ) -> Result<(), HashTableError>;
-
-    /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
-
-    fn idx_to_datapoint(&self, idx: u32) -> &DataPoint;
-
-    fn increase_storage(&mut self, size: usize);
-
-    fn describe(&self);
 }
 
 /// In memory storage of hashed vectors/ indexes.

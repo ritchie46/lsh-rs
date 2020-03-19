@@ -1,6 +1,6 @@
 #![cfg(feature = "stats")]
-use crate::table::DataPoint;
 use crate::utils::l2_norm;
+use crate::DataPoint;
 use crate::LSH;
 use ndarray::aview1;
 use rayon::prelude::*;

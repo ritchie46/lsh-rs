@@ -1,7 +1,11 @@
 use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
 use crate::multi_probe::create_hash_permutation;
-use crate::table::{DataPoint, DataPointSlice, HashTableError, HashTables, MemoryTable};
+use crate::table::{
+    general::{HashTableError, HashTables},
+    mem::MemoryTable,
+};
 use crate::utils::create_rng;
+use crate::{DataPoint, DataPointSlice};
 use fnv::FnvHashSet as HashSet;
 use rand::distributions::Uniform;
 use rand::Rng;
@@ -415,7 +419,7 @@ mod test {
         let mut lsh = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
         lsh.store_vec(v1);
         assert_eq!(lsh.hash_tables.vec_store.map.len(), 0);
-        lsh.query_bucket(v1);
+        lsh.query_bucket_ids(v1);
     }
 
     #[test]

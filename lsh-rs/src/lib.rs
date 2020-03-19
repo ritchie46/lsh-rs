@@ -92,10 +92,16 @@ extern crate ndarray;
 mod hash;
 mod lsh;
 mod multi_probe;
-mod table;
+mod table {
+    pub mod general;
+    pub mod mem;
+}
 pub mod utils;
 pub use crate::lsh::LSH;
 pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
-pub use table::MemoryTable;
+pub use table::mem::MemoryTable;
 #[cfg(feature = "stats")]
 pub mod stats;
+
+pub type DataPoint = Vec<f32>;
+pub type DataPointSlice = [f32];
