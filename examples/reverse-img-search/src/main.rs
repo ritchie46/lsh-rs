@@ -2,14 +2,16 @@ extern crate image;
 #[macro_use]
 extern crate ndarray;
 mod prepare;
+mod query;
 mod utils;
 use crate::prepare::{create_img_vecs, describe_vecs, make_lsh, optimize_params};
+use crate::query::query_image;
 use crate::utils::load_lsh;
 use ndarray::prelude::*;
 use std::io::Write;
 
 pub const BREAK_100: bool = true;
-pub const DISTANCE_R: f32 = 20.;
+pub const DISTANCE_R: f32 = 30.;
 pub const N_TOTAL: u32 = 30000;
 
 fn show_usage_msg() {
@@ -19,7 +21,7 @@ fn show_usage_msg() {
 Usage:
     RUN [SUBCOMMAND]
 
-Subcommands:
+Subcommands:46
     prepare-vec
         "
     );
@@ -27,7 +29,7 @@ Subcommands:
 }
 
 fn main() {
-    let folder = std::env::var("IMG_FOLDER").expect("IMG_FOLDER not set");
+    let img_folder = std::env::var("IMG_FOLDER").expect("IMG_FOLDER not set");
     let vec_folder = std::env::var("VEC_FOLDER").expect("VEC_FOLDER not set");
     let ser_folder = std::env::var("SERIALIZE_FOLDER").expect("SERIALIZE_FOLDER not set");
 
@@ -39,7 +41,7 @@ fn main() {
     }
     match &args[1][..] {
         "prepare-vec" => {
-            create_img_vecs(&folder, &vec_folder);
+            create_img_vecs(&img_folder, &vec_folder);
         }
         "describe" => {
             describe_vecs(&vec_folder);
@@ -52,6 +54,9 @@ fn main() {
         }
         "load" => {
             load_lsh(&ser_folder);
+        }
+        "query" => {
+            query_image(&vec_folder, &ser_folder, &img_folder);
         }
         _ => {
             show_usage_msg();

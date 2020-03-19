@@ -1,4 +1,4 @@
-use crate::utils::file_iter;
+use crate::utils::{read_vec, sorted_paths};
 use crate::{BREAK_100, DISTANCE_R, N_TOTAL};
 use image::{GenericImage, GenericImageView};
 use lsh_rs::{
@@ -24,8 +24,9 @@ pub fn create_img_vecs(folder: &str, out_folder: &str) -> Result<(), Box<dyn std
         let original_name = entry.file_name();
         let new_name = original_name.to_str().unwrap().split('.').next().unwrap();
 
-        let f = fs::File::create(format!("{}/{}", out_folder, new_name)).unwrap();
-        serde_cbor::to_writer(f, &v);
+        let mut f = fs::File::create(format!("{}/{}", out_folder, new_name)).unwrap();
+        let buf = serde_cbor::to_vec(&v).unwrap();
+        f.write(&buf).unwrap();
         println!("{:?}", new_name)
     });
     Ok(())
@@ -34,9 +35,11 @@ pub fn create_img_vecs(folder: &str, out_folder: &str) -> Result<(), Box<dyn std
 pub fn optimize_params(vec_folder: &str, n: usize) -> Result<(), Box<dyn std::error::Error>> {
     let delta = 0.10;
 
-    let vs: Vec<Vec<f32>> = file_iter(vec_folder)
+    let vs: Vec<Vec<f32>> = sorted_paths(vec_folder)
+        .iter()
         .zip(0..n)
-        .map(|(v, i)| {
+        .map(|(path, i)| {
+            let v = read_vec(path.to_str().unwrap());
             let v = aview1(&v);
             let v = &v / DISTANCE_R;
             v.to_vec()
@@ -65,7 +68,9 @@ pub fn optimize_params(vec_folder: &str, n: usize) -> Result<(), Box<dyn std::er
 pub fn describe_vecs(folder: &str) -> Result<(), std::io::Error> {
     let mut l2_norms = vec![];
     let mut c = 0;
-    for v in file_iter(folder) {
+
+    for p in sorted_paths(folder) {
+        let v = read_vec(p.to_str().unwrap());
         print!("{}\r", c);
         std::io::stdout().flush().unwrap();
         c += 1;
@@ -101,7 +106,8 @@ pub fn make_lsh(
 
     let mut c = 0;
 
-    for v in file_iter(folder) {
+    for p in sorted_paths(folder) {
+        let v = read_vec(p.to_str().unwrap());
         c += 1;
         print!("{}\r", c);
         std::io::stdout().flush().unwrap();

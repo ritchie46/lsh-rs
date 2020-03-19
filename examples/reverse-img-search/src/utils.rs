@@ -1,14 +1,31 @@
+use crate::DISTANCE_R;
 use lsh_rs::{MemoryTable, L2, LSH};
+use ndarray::prelude::*;
 use std::fs;
+use std::fs::DirEntry;
+use std::io::Read;
+use std::path::PathBuf;
 
-pub fn file_iter(vec_folder: &str) -> Box<dyn Iterator<Item = Vec<f32>>> {
-    let a = fs::read_dir(vec_folder).unwrap().map(|entry| {
-        let entry = entry.unwrap();
-        let f = fs::File::open(entry.path()).unwrap();
-        let mut v: Vec<f32> = serde_cbor::from_reader(f).unwrap();
-        v
-    });
-    Box::new(a)
+pub fn scale_vec(v: &[f32]) -> Vec<f32> {
+    let v = aview1(&v);
+    let v = &v / DISTANCE_R;
+    v.to_vec()
+}
+
+pub fn read_vec(path: &str) -> Vec<f32> {
+    let mut f = fs::File::open(path).unwrap();
+    let mut buf: Vec<u8> = vec![];
+    f.read_to_end(&mut buf);
+    serde_cbor::from_slice(&buf).unwrap()
+}
+
+pub fn sorted_paths(folder: &str) -> Vec<PathBuf> {
+    let mut entries = fs::read_dir(folder)
+        .unwrap()
+        .map(|res| res.unwrap().path())
+        .collect::<Vec<_>>();
+    entries.sort();
+    entries
 }
 
 pub fn load_lsh(serialize_folder: &str) -> LSH<MemoryTable, L2> {
