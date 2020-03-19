@@ -1,48 +1,61 @@
 extern crate image;
-use image::{GenericImage, GenericImageView};
-use lsh_rs::{
-    stats::{estimate_l, l2_ph},
-    LSH,
-};
-use rayon::prelude::*;
-use std::fs;
-use std::fs::DirEntry;
 #[macro_use]
 extern crate ndarray;
+mod img_prep;
+
+use crate::img_prep::create_img_vecs;
+use lsh_rs::{
+    stats::{estimate_l, l2_ph, optimize_l2_params},
+    utils::l2_norm,
+    LSH,
+};
 use ndarray::prelude::*;
-use ndarray::Zip;
-use std::io::Write; // <--- bring flush() into scope
+use rayon::prelude::*;
+use std::fs;
+use std::io::Write;
 
 const BREAK_100: bool = true;
+const DISTANCE_R: f32 = 20.;
+const N_TOTAL: u32 = 30000;
 
-fn optimize_params() {
-    let delta = 0.2;
-    for r in (2..20).step_by(2) {
-        let p1 = l2_ph(r as f64, 1.);
-
-        for k in 5..20 {
-            let l = estimate_l(delta, p1, k as usize);
-            println!("r: {} k: {} L: {} p1: {}", r, k, l, p1)
-        }
-    }
+fn file_iter(vec_folder: &str) -> Box<dyn Iterator<Item = Vec<f32>>> {
+    let a = fs::read_dir(vec_folder).unwrap().map(|entry| {
+        let entry = entry.unwrap();
+        let f = fs::File::open(entry.path()).unwrap();
+        let mut v: Vec<f32> = serde_cbor::from_reader(f).unwrap();
+        v
+    });
+    Box::new(a)
 }
 
-fn create_img_vecs(folder: &str, out_folder: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let files = fs::read_dir(folder)?;
-    let files: Vec<DirEntry> = files.map(|e| e.unwrap()).collect();
+fn optimize_params(vec_folder: &str, n: usize) -> Result<(), Box<dyn std::error::Error>> {
+    let delta = 0.10;
 
-    files.par_iter().for_each(|entry| {
-        let img = image::open(entry.path()).unwrap();
-        let img = img.thumbnail_exact(90, 90);
-        let v: Vec<f32> = img.to_bytes().iter().map(|&x| (x as f32) / 255.).collect();
+    let vs: Vec<Vec<f32>> = file_iter(vec_folder)
+        .zip(0..n)
+        .map(|(v, i)| {
+            let v = aview1(&v);
+            let v = &v / DISTANCE_R;
+            v.to_vec()
+        })
+        .collect();
 
-        let original_name = entry.file_name();
-        let new_name = original_name.to_str().unwrap().split('.').next().unwrap();
+    let dim = vs[0].len();
 
-        let f = fs::File::create(format!("{}/{}", out_folder, new_name)).unwrap();
-        serde_cbor::to_writer(f, &v);
-        println!("{:?}", new_name)
+    let mut results = optimize_l2_params(delta, dim, &vs);
+
+    // now only ran on a sample n of N.
+    // search_time is expected to increase by N/n (due to duplicates)
+    let search_time_factor = N_TOTAL as f64 / n as f64;
+    results.sort_unstable_by_key(|opt_res| {
+        let t = opt_res.hash_time + opt_res.search_time * search_time_factor;
+        t as i32
     });
+    for opt_res in results {
+        let t = opt_res.hash_time + opt_res.search_time * search_time_factor;
+        println!("{:?}, total time: {}", opt_res, t);
+    }
+
     Ok(())
 }
 
@@ -62,14 +75,16 @@ fn make_lsh(
         .l2(r);
 
     let mut c = 0;
-    for entry in fs::read_dir(folder)? {
+
+    for v in file_iter(folder) {
         c += 1;
         print!("{}\r", c);
         std::io::stdout().flush().unwrap();
-        let entry = entry?;
-        let f = fs::File::open(entry.path())?;
-        let v: Vec<f32> = serde_cbor::from_reader(f).unwrap();
-        lsh.store_vec(&v);
+
+        let v = aview1(&v);
+        let v = &v / DISTANCE_R;
+
+        lsh.store_vec(&v.to_vec());
         if c > 100 && BREAK_100 {
             break;
         }
@@ -81,41 +96,20 @@ fn make_lsh(
 }
 
 fn describe_vecs(folder: &str) -> Result<(), std::io::Error> {
-    let mut entries = fs::read_dir(folder)?;
-    let mut prev_entry = entries.next().expect("no files in directory?")?;
-
     let mut l2_norms = vec![];
     let mut c = 0;
-    for entry in entries {
+    for v in file_iter(folder) {
         print!("{}\r", c);
         std::io::stdout().flush().unwrap();
         c += 1;
-        let entry = entry?;
-
-        let f = fs::File::open(entry.path())?;
-        let v: Vec<f32> = serde_cbor::from_reader(f).unwrap();
-
-        let f = fs::File::open(prev_entry.path())?;
-        let v_prev: Vec<f32> = serde_cbor::from_reader(f).unwrap();
-
-        let mut ar: Array1<f32> = Array1::zeros(v.len());
-        Zip::from(&mut ar)
-            .and(aview1(&v))
-            .and(&aview1(&v_prev))
-            .apply(|r, &a, &b| {
-                let mut x = a - b;
-                x = (x * x).powf(0.5);
-                *r = x
-            });
-        let l2 = ar.mean().unwrap();
+        let l2 = l2_norm(aview1(&v));
         l2_norms.push(l2);
-        prev_entry = entry;
-        if c > 100 {
+        if c > 100 && BREAK_100 {
             break;
         }
     }
     println!(
-        "L2 norms: min: {}, max:{} ,avg:{}",
+        "L2 norms: min: {}, max: {}, avg: {}",
         l2_norms.iter().copied().fold(0. / 0., f32::min),
         l2_norms.iter().copied().fold(0. / 0., f32::max),
         l2_norms.iter().sum::<f32>() / l2_norms.len() as f32
@@ -139,7 +133,7 @@ Subcommands:
 
 fn main() {
     let folder = std::env::var("IMG_FOLDER").expect("IMG_FOLDER not set");
-    let out_folder = std::env::var("VEC_FOLDER").expect("VEC_FOLDER not set");
+    let vec_folder = std::env::var("VEC_FOLDER").expect("VEC_FOLDER not set");
     let ser_folder = std::env::var("SERIALIZE_FOLDER").expect("SERIALIZE_FOLDER not set");
 
     let args: Vec<String> = std::env::args().collect();
@@ -150,16 +144,16 @@ fn main() {
     }
     match &args[1][..] {
         "prepare-vec" => {
-            create_img_vecs(&folder, &out_folder);
+            create_img_vecs(&folder, &vec_folder);
         }
         "describe" => {
-            describe_vecs(&out_folder);
+            describe_vecs(&vec_folder);
         }
         "make-lsh" => {
-            make_lsh(&out_folder, &ser_folder, 12, 20, 90 * 90 * 3, 12, 4.);
+            make_lsh(&vec_folder, &ser_folder, 19, 150, 90 * 90 * 3, 12, 4.);
         }
         "opt" => {
-            optimize_params();
+            optimize_params(&vec_folder, 250);
         }
         _ => {
             show_usage_msg();

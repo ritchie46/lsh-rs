@@ -3,6 +3,7 @@ use crate::utils::{all_eq, increase_capacity};
 use fnv::FnvHashMap as HashMap;
 use fnv::FnvHashSet as HashSet;
 use serde::{Deserialize, Serialize};
+use std::iter::FromIterator;
 
 pub type DataPoint = Vec<f32>;
 pub type DataPointSlice = [f32];
@@ -166,9 +167,13 @@ impl HashTables for MemoryTable {
         let mut lengths = vec![];
         let mut max_len = 0;
         let mut min_len = 1000000;
+        let mut set: HashSet<i32> = HashSet::default();
         for map in self.hash_tables.iter() {
-            for (_, v) in map.iter() {
+
+            for (k, v) in map.iter() {
                 let len = v.len();
+                let hash_values: HashSet<i32> = HashSet::from_iter(k.iter().copied());
+                set = set.union(&hash_values).copied().collect();
                 lengths.push(len);
                 if len > max_len {
                     max_len = len
@@ -180,10 +185,11 @@ impl HashTables for MemoryTable {
         }
 
         println!(
-            "Bucket lengths: max: {}, min: {}, avg: {}",
+            "Bucket lengths: max: {}, min: {}, avg: {}, hash value projections: {:?}",
             max_len,
             min_len,
-            lengths.iter().sum::<usize>() as f32 / lengths.len() as f32
+            lengths.iter().sum::<usize>() as f32 / lengths.len() as f32,
+            set
         )
     }
 }

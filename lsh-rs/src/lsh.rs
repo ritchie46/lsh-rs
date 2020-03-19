@@ -255,6 +255,9 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     /// # Arguments
     /// * `v` - Query vector
     pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
+        if self.only_index_storage {
+            panic!("cannot query bucket, use query_bucket_ids")
+        }
         let bucket_union = self.query_bucket_union(v);
 
         bucket_union
@@ -404,7 +407,8 @@ mod test {
         // Test if vec storage is empty
         let mut lsh = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
         lsh.store_vec(v1);
-        assert_eq!(lsh.hash_tables.vec_store.map.len(), 0)
+        assert_eq!(lsh.hash_tables.vec_store.map.len(), 0);
+        lsh.query_bucket(v1);
     }
 
     #[test]

@@ -6,6 +6,10 @@ use statrs::{
     distribution::{Normal, Univariate},
 };
 use std::time::{Duration, Instant};
+use std::io::Write;
+use rayon::prelude::*;
+use crate::utils::l2_norm;
+use ndarray::aview1;
 
 /// Assumes R normalized data points. So R = 1.
 /// Compute 𝑃1 if c = 1.
@@ -31,26 +35,64 @@ pub fn estimate_l(delta: f64, p1: f64, k: usize) -> usize {
     (delta.ln() / (1. - p1.powf(k as f64)).ln()).round() as usize
 }
 
-pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) {
-    let mut results = vec![];
+#[derive(Debug)]
+pub struct OptRes {
+    pub r: f32,
+    pub k: usize,
+    pub l: usize,
+    pub search_time: f64,
+    pub hash_time: f64,
+    pub min_len: usize,
+    pub max_len: usize,
+    pub avg_len: f32,
+}
 
-    // assume R normalized data so c = 1
-    for r in (4..20).step_by(2) {
-        let p1 = l2_ph(r as f64, 1.);
-        for k in 8..15 {
-            let l = estimate_l(delta, p1, k as usize);
-            let mut lsh = LSH::new(k, l, dim).only_index().l2(r as f32);
-            lsh.store_vecs(vs);
-            let mut q_time = 0.;
-            for v in vs {
-                let t0 = Instant::now();
-                lsh.query_bucket(v);
-                let duration = t0.elapsed();
-                q_time += duration.as_secs_f64();
-            }
-            results.push((k, l, q_time))
-        }
+pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRes> {
+    let mut params = vec![];
+    let r = 4.0;
+    let p1 = l2_ph(r as f64, 1.);
+    for k in 10..20 {
+        let l = estimate_l(delta, p1, k as usize);
+        params.push((r, k, l))
     }
+    let result: Vec<OptRes> = params.par_iter().map(|&(r, k, l)| {
+        let mut lsh = LSH::new(k, l, dim).l2(r as f32);
+        lsh.store_vecs(vs);
+        let mut search_time = 0.;
+        let mut hash_time = 0.;
+        let mut bucket_lengths = Vec::with_capacity(vs.len());
+        for v in vs {
+            let th = Instant::now();
+            let mut bucket = lsh.query_bucket(v);
+            hash_time += th.elapsed().as_secs_f64();
+
+            bucket_lengths.push(bucket.len());
+
+            let t0 = Instant::now();
+            let q = aview1(&v);
+            bucket.sort_unstable_by_key(|&p|{
+                let dist = &aview1(&p) - &q;
+                let l2 = l2_norm(dist.view());
+                (l2 * 1e5) as i32
+            });
+            let duration = t0.elapsed();
+            search_time += duration.as_secs_f64();
+        }
+        let min = *bucket_lengths.iter().min().unwrap_or(&(0 as usize));
+        let max = *bucket_lengths.iter().max().unwrap_or(&(0 as usize));
+        let avg = bucket_lengths.iter().sum::<usize>() as f32 / bucket_lengths.len() as f32;
+        OptRes {
+            r,
+            k,
+            l,
+            search_time,
+            hash_time,
+            min_len: min,
+            max_len: max,
+            avg_len: avg
+        }
+    }).collect();
+    result
 }
 
 #[cfg(test)]
