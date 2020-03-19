@@ -4,6 +4,7 @@ extern crate ndarray;
 mod prepare;
 mod utils;
 use crate::prepare::{create_img_vecs, describe_vecs, make_lsh, optimize_params};
+use crate::utils::load_lsh;
 use ndarray::prelude::*;
 use std::io::Write;
 
@@ -48,6 +49,9 @@ fn main() {
         }
         "opt" => {
             optimize_params(&vec_folder, 250);
+        }
+        "load" => {
+            load_lsh(&ser_folder);
         }
         _ => {
             show_usage_msg();

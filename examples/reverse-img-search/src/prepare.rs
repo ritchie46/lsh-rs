@@ -112,7 +112,7 @@ pub fn make_lsh(
         lsh.store_vec(&v.to_vec());
     }
     lsh.describe();
-    lsh.dump(format!("{}/save.cbor", serialize_folder));
+    lsh.dump(format!("{}/save.bincode", serialize_folder));
 
     Ok(())
 }

@@ -169,7 +169,6 @@ impl HashTables for MemoryTable {
         let mut min_len = 1000000;
         let mut set: HashSet<i32> = HashSet::default();
         for map in self.hash_tables.iter() {
-
             for (k, v) in map.iter() {
                 let len = v.len();
                 let hash_values: HashSet<i32> = HashSet::from_iter(k.iter().copied());

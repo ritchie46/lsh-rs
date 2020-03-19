@@ -8,6 +8,7 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
+use std::io::{Read, Write};
 use std::path::Path;
 
 /// Wrapper for LSH functionality.
@@ -336,7 +337,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
 /// Intermediate data structure for serialization. Only contains the absolute
 /// necessities for reproducible results.
 #[derive(Serialize, Deserialize)]
-struct CborBin {
+struct IntermediatBlob {
     hash_tables: Vec<u8>,
     hashers: Vec<u8>,
     n_hash_tables: usize,
@@ -345,13 +346,30 @@ struct CborBin {
     _seed: u64,
 }
 
-impl<H: Serialize + DeserializeOwned + VecHash> LSH<MemoryTable, H> {
-    pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
-        let f = File::create(path)?;
+impl<H> LSH<MemoryTable, H>
+where
+    H: Serialize + DeserializeOwned + VecHash + std::marker::Sync,
+{
+    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        let mut f = File::open(path)?;
+        let mut buf: Vec<u8> = vec![];
+        f.read_to_end(&mut buf);
 
-        let hash_tables = serde_cbor::to_vec(&self.hash_tables)?;
-        let hashers = serde_cbor::to_vec(&self.hashers)?;
-        let cborbin = CborBin {
+        let ib: IntermediatBlob = bincode::deserialize(&buf)?;
+        self.hashers = bincode::deserialize(&ib.hashers)?;
+        self.hash_tables = bincode::deserialize(&ib.hash_tables)?;
+        self.n_hash_tables = ib.n_hash_tables;
+        self.n_projections = ib.n_projections;
+        self.dim = ib.dim;
+        self._seed = ib._seed;
+
+        Ok(())
+    }
+    pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+        let hash_tables = bincode::serialize(&self.hash_tables)?;
+        let hashers = bincode::serialize(&self.hashers)?;
+
+        let ib = IntermediatBlob {
             hash_tables,
             hashers,
             n_hash_tables: self.n_hash_tables,
@@ -359,20 +377,9 @@ impl<H: Serialize + DeserializeOwned + VecHash> LSH<MemoryTable, H> {
             dim: self.dim,
             _seed: self._seed,
         };
-
-        serde_cbor::to_writer(f, &cborbin)?;
-        Ok(())
-    }
-    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
-        let f = File::open(path)?;
-        let cborbin: CborBin = serde_cbor::from_reader(f)?;
-        self.hash_tables = serde_cbor::from_slice(&cborbin.hash_tables)?;
-        self.hashers = serde_cbor::from_slice(&cborbin.hashers)?;
-        self.n_hash_tables = cborbin.n_hash_tables;
-        self.n_projections = cborbin.n_projections;
-        self.dim = cborbin.dim;
-        self._seed = cborbin._seed;
-
+        let mut f = File::create(path)?;
+        let blob = bincode::serialize(&ib)?;
+        f.write(&blob)?;
         Ok(())
     }
 }
