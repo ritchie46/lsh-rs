@@ -21,8 +21,13 @@ fn show_usage_msg() {
 Usage:
     RUN [SUBCOMMAND]
 
-Subcommands:46
-    prepare-vec
+Subcommands:
+    prepare-intermediate-vectors
+    describe
+    make-lsh
+    sample-params
+    load
+    query
         "
     );
     std::process::exit(0);
@@ -40,7 +45,7 @@ fn main() {
         std::process::exit(0);
     }
     match &args[1][..] {
-        "prepare-vec" => {
+        "prepare-intermediate-vectors" => {
             create_img_vecs(&img_folder, &vec_folder);
         }
         "describe" => {
@@ -49,7 +54,7 @@ fn main() {
         "make-lsh" => {
             make_lsh(&vec_folder, &ser_folder, 19, 150, 90 * 90 * 3, 12, 4.);
         }
-        "opt" => {
+        "sample-params" => {
             optimize_params(&vec_folder, 250);
         }
         "load" => {
