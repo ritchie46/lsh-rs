@@ -3,7 +3,7 @@
 bench:
 	@cd lsh-rs/bench && cargo +nightly bench
 
-test:
+test: clean-db
 	@cd lsh-rs && cargo test --features stats --lib
 
 python-lib:
@@ -11,3 +11,6 @@ python-lib:
 
 doc:
 	@cd lsh-rs && cargo doc --open
+
+clean-db:
+	@rm */**.db3

@@ -48,6 +48,21 @@ fn make_table(table_name: &str, connection: &Connection) -> DbResult<()> {
     Ok(())
 }
 
+fn table_exists(table_name: &str, connection: &Connection) -> DbResult<bool> {
+    let mut stmt = connection.prepare(&format!(
+        "SELECT name FROM
+sqlite_master WHERE type='table' AND name='{}';",
+        table_name
+    ))?;
+    let mut rows = stmt.query(params![])?;
+
+    let row = rows.next()?;
+    match row {
+        None => Ok(false),
+        Some(row) => Ok(true),
+    }
+}
+
 ///
 /// Requirement on Debian: libsqlite3-dev
 pub struct SqlTable {
@@ -58,14 +73,20 @@ pub struct SqlTable {
     table_names: Vec<String>,
 }
 
-fn init_table(conn: &Connection, n_hash_tables: usize) -> DbResult<Vec<String>> {
+fn get_table_names(n_hash_tables: usize) -> Vec<String> {
     let mut table_names = Vec::with_capacity(n_hash_tables);
     for idx in 0..n_hash_tables {
         let table_name = format!("hash_table_{}", idx);
-        make_table(&table_name, &conn)?;
         table_names.push(table_name);
     }
-    Ok(table_names)
+    table_names
+}
+
+fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
+    for table_name in table_names {
+        make_table(&table_name, &conn)?;
+    }
+    Ok(())
 }
 
 impl SqlTable {
@@ -79,7 +100,8 @@ impl SqlTable {
 
     fn new_in_mem(n_hash_tables: usize, only_index_storage: bool) -> Self {
         let conn = Connection::open_in_memory().expect("could not open sqlite");
-        let table_names = init_table(&conn, n_hash_tables).expect("could not make tables");
+        let table_names = get_table_names(n_hash_tables);
+        init_table(&conn, &table_names).expect("could not make tables");
         SqlTable {
             n_hash_tables,
             only_index_storage,
@@ -91,9 +113,15 @@ impl SqlTable {
 }
 
 impl HashTables for SqlTable {
-    fn new(n_hash_tables: usize, only_index_storage: bool, dump_path: &str) -> Self {
-        let conn = Connection::open(dump_path).expect("could not open sqlite");
-        let table_names = init_table(&conn, n_hash_tables).expect("could not make tables");
+    fn new(n_hash_tables: usize, only_index_storage: bool, db_dir: &str) -> Self {
+        let mut path = std::path::Path::new(db_dir);
+        let buf = path.with_file_name("lsh.db3");
+        let conn = Connection::open(&buf).expect("could not open sqlite");
+        let table_names = get_table_names(n_hash_tables);
+
+        if let Ok(false) = table_exists(&table_names[0], &conn) {
+            init_table(&conn, &table_names).expect("could not make tables");
+        }
         SqlTable {
             n_hash_tables,
             only_index_storage,
@@ -212,5 +240,18 @@ mod test {
             let hash_back = blob_to_hash(blob);
             assert_eq!(hash, hash_back)
         }
+    }
+
+    #[test]
+    fn test_table_exist() {
+        // connection w/ table
+        let conn = Connection::open_in_memory().expect("could not open sqlite");
+        let table_names = vec!["table_0".to_string()];
+        init_table(&conn, &table_names).expect("could not make tables");
+        assert_eq!(Ok(true), table_exists(&table_names[0], &conn));
+        conn.close();
+        // new connection wo/ tables
+        let conn = Connection::open_in_memory().expect("could not open sqlite");
+        assert_eq!(Ok(false), table_exists(&table_names[0], &conn));
     }
 }

@@ -15,7 +15,7 @@ pub enum HashTableError {
 
 /// Hashtable consisting of `L` Hash tables.
 pub trait HashTables {
-    fn new(n_hash_tables: usize, only_index_storage: bool, dump_path: &str) -> Self;
+    fn new(n_hash_tables: usize, only_index_storage: bool, db_dir: &str) -> Self;
 
     /// # Arguments
     ///
