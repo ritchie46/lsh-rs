@@ -2,7 +2,6 @@ use crate::utils::{create_rng, l2_norm};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 pub type Hash = Vec<i32>;

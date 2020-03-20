@@ -7,7 +7,6 @@ use crate::table::{
 use crate::utils::create_rng;
 use crate::{DataPoint, DataPointSlice};
 use fnv::FnvHashSet as HashSet;
-use rand::distributions::Uniform;
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -357,7 +356,7 @@ where
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::open(path)?;
         let mut buf: Vec<u8> = vec![];
-        f.read_to_end(&mut buf);
+        f.read_to_end(&mut buf)?;
 
         let ib: IntermediatBlob = bincode::deserialize(&buf)?;
         self.hashers = bincode::deserialize(&ib.hashers)?;
