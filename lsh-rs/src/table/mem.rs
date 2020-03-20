@@ -44,7 +44,7 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn new(n_hash_tables: usize, only_index_storage: bool) -> MemoryTable {
+    pub fn new(n_hash_tables: usize, only_index_storage: bool) -> Self {
         // TODO: Check the average number of vectors in the buckets.
         // this way the capacity can be approximated by the number of DataPoints that will
         // be stored.
@@ -68,15 +68,20 @@ impl HashTables for MemoryTable {
         hash_table: usize,
     ) -> Result<u32, HashTableError> {
         let tbl = &mut self.hash_tables[hash_table];
-        let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
-        let idx = self.counter;
 
+        // Store hash and id/idx
+        let idx = self.counter;
+        let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
+        bucket.insert(idx);
+
+        // There are N hash_tables per unique vector. So we only store
+        // the unique v hash_table 0 and increment the counter (the id)
+        // after we've update the last (N) hash_table.
         if (hash_table == 0) && (!self.only_index_storage) {
             self.vec_store.push(d.to_vec());
         } else if hash_table == self.n_hash_tables - 1 {
             self.counter += 1
         }
-        bucket.insert(idx);
         Ok(idx)
     }
 
@@ -116,8 +121,8 @@ impl HashTables for MemoryTable {
         }
     }
 
-    fn idx_to_datapoint(&self, idx: u32) -> &DataPoint {
-        self.vec_store.get(idx)
+    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError> {
+        Ok(self.vec_store.get(idx))
     }
 
     fn increase_storage(&mut self, size: usize) {

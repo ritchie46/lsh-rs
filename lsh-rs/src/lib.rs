@@ -95,6 +95,7 @@ mod multi_probe;
 mod table {
     pub mod general;
     pub mod mem;
+    pub mod sqlite;
 }
 pub mod utils;
 pub use crate::lsh::LSH;

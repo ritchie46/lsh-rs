@@ -266,7 +266,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
 
         bucket_union
             .iter()
-            .map(|&idx| self.hash_tables.idx_to_datapoint(idx))
+            .map(|&idx| self.hash_tables.idx_to_datapoint(idx).unwrap())
             .collect()
     }
 

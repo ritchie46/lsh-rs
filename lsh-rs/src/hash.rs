@@ -4,7 +4,8 @@ use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use serde::{Deserialize, Serialize};
 
-pub type Hash = Vec<i32>;
+pub type HashPrimitive = i32;
+pub type Hash = Vec<HashPrimitive>;
 
 pub trait VecHash {
     fn hash_vec_query(&self, v: &[f32]) -> Hash;

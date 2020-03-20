@@ -4,9 +4,13 @@ use fnv::FnvHashSet as HashSet;
 
 /// Bucket contains indexes to VecStore
 pub type Bucket = HashSet<u32>;
+
+#[derive(Debug)]
 pub enum HashTableError {
     Failed,
     NotFound,
+    TableNotExist,
+    NotImplemented,
 }
 
 /// Hashtable consisting of `L` Hash tables.
@@ -33,7 +37,7 @@ pub trait HashTables {
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
 
-    fn idx_to_datapoint(&self, idx: u32) -> &DataPoint;
+    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError>;
 
     fn increase_storage(&mut self, size: usize);
 
