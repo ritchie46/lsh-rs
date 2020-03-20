@@ -2,7 +2,7 @@ use super::general::{Bucket, HashTableError, HashTables};
 use crate::hash::{Hash, HashPrimitive};
 use crate::{DataPoint, DataPointSlice};
 use fnv::FnvHashSet;
-use rusqlite::{params, Connection, Result as DbResult};
+use rusqlite::{params, Connection, Error as DbError, Result as DbResult};
 use std::mem;
 
 fn hash_to_blob(hash: &[i32]) -> &[u8] {
@@ -61,6 +61,25 @@ sqlite_master WHERE type='table' AND name='{}';",
         None => Ok(false),
         Some(row) => Ok(true),
     }
+}
+
+fn insert_table(
+    table_name: &str,
+    hash: &Hash,
+    idx: u32,
+    connection: &Connection,
+) -> DbResult<usize> {
+    let blob = hash_to_blob(hash);
+    connection.execute(
+        &format!(
+            "
+INSERT INTO {} (hash, id)
+VALUES (?1, ?2)
+        ",
+            table_name
+        ),
+        params![blob, idx],
+    )
 }
 
 ///
@@ -142,25 +161,16 @@ impl HashTables for SqlTable {
 
         // Get the table name to store this id
         let table_name = self.get_table_name(hash_table)?;
-
-        let blob = hash_to_blob(&hash);
-        let r = self.conn.execute(
-            &format!(
-                "
-INSERT INTO {} (hash, id)
-VALUES (?1, ?2)
-        ",
-                table_name
-            ),
-            params![blob, idx],
-        );
+        let r = insert_table(&table_name, &hash, idx, &self.conn);
 
         // Once we've traversed the last table we increment the id counter.
         if hash_table == self.n_hash_tables - 1 {
             self.counter += 1
         };
+
         match r {
-            Ok(_) => return Ok(idx),
+            Ok(_) => Ok(idx),
+            Err(DbError::SqliteFailure(_, _)) => Ok(idx),
             Err(e) => panic!(format!("could not insert in db: {:?}", e)),
         }
     }
