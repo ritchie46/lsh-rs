@@ -113,11 +113,11 @@ impl HashTables for MemoryTable {
     }
 
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError> {
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
         let tbl = &self.hash_tables[hash_table];
         match tbl.get(hash) {
             None => Err(HashTableError::NotFound),
-            Some(bucket) => Ok(bucket),
+            Some(bucket) => Ok(bucket.clone()),
         }
     }
 

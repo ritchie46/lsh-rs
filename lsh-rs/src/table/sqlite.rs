@@ -1,7 +1,8 @@
 use super::general::{Bucket, HashTableError, HashTables};
 use crate::hash::{Hash, HashPrimitive};
 use crate::{DataPoint, DataPointSlice};
-use rusqlite::{params, Connection};
+use fnv::FnvHashSet;
+use rusqlite::{params, Connection, Result as DbResult};
 use std::mem;
 
 fn hash_to_blob(hash: &[i32]) -> &[u8] {
@@ -12,6 +13,39 @@ fn hash_to_blob(hash: &[i32]) -> &[u8] {
 fn blob_to_hash(blob: &[u8]) -> &[i32] {
     let data = blob.as_ptr() as *const i32;
     unsafe { std::slice::from_raw_parts(data, blob.len() / std::mem::size_of::<HashPrimitive>()) }
+}
+
+fn query_bucket(blob: &[u8], table_name: &str, connection: &Connection) -> DbResult<Bucket> {
+    let mut stmt = connection.prepare(&format!(
+        "
+SELECT (id) FROM {}
+WHERE hash = ?
+        ",
+        table_name
+    ))?;
+    let mut rows = stmt.query(params![blob])?;
+
+    let mut bucket = FnvHashSet::default();
+    while let Some(row) = rows.next()? {
+        bucket.insert(row.get(0)?);
+    }
+    Ok(bucket)
+}
+
+fn make_table(table_name: &str, connection: &Connection) -> DbResult<()> {
+    connection.execute(
+        &format!(
+            "CREATE TABLE {} (
+             hash       BLOB,
+             id         INTEGER,
+             PRIMARY KEY (hash, id)
+            )
+                ",
+            table_name
+        ),
+        params![],
+    )?;
+    Ok(())
 }
 
 ///
@@ -30,19 +64,9 @@ impl SqlTable {
 
         let mut table_names = Vec::with_capacity(n_hash_tables);
         for idx in 0..n_hash_tables {
-            table_names.push(format!("hash_table_{}", idx));
-            conn.execute(
-                &format!(
-                    "CREATE TABLE hash_table_{} (
-             hash       BLOB PRIMARY KEY,
-             id         INTEGER
-            )
-                ",
-                    idx
-                ),
-                params![],
-            )
-            .expect("could not create table");
+            let table_name = format!("hash_table_{}", idx);
+            make_table(&table_name, &conn).expect("could not create table");
+            table_names.push(table_name);
         }
         SqlTable {
             n_hash_tables,
@@ -50,6 +74,14 @@ impl SqlTable {
             counter: 0,
             conn,
             table_names,
+        }
+    }
+
+    fn get_table_name(&self, hash_table: usize) -> Result<&str, HashTableError> {
+        let opt = self.table_names.get(hash_table);
+        match opt {
+            Some(tbl_name) => Ok(&tbl_name[..]),
+            None => Err(HashTableError::TableNotExist),
         }
     }
 }
@@ -65,12 +97,7 @@ impl HashTables for SqlTable {
         let idx = self.counter;
 
         // Get the table name to store this id
-        let opt = self.table_names.get(hash_table);
-        let tbl_name = if let Some(tbl_name) = opt {
-            tbl_name
-        } else {
-            return Err(HashTableError::TableNotExist);
-        };
+        let table_name = self.get_table_name(hash_table)?;
 
         let blob = hash_to_blob(&hash);
         let r = self.conn.execute(
@@ -79,7 +106,7 @@ impl HashTables for SqlTable {
 INSERT INTO {} (hash, id)
 VALUES (?1, ?2)
         ",
-                tbl_name
+                table_name
             ),
             params![blob, idx],
         );
@@ -104,8 +131,15 @@ VALUES (?1, ?2)
     }
 
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError> {
-        Err(HashTableError::NotImplemented)
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
+        let table_name = self.get_table_name(hash_table)?;
+        let blob = hash_to_blob(hash);
+        let res = query_bucket(blob, table_name, &self.conn);
+
+        match res {
+            Ok(bucket) => Ok(bucket),
+            Err(_) => Err(HashTableError::Failed),
+        }
     }
 
     fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError> {
@@ -135,8 +169,18 @@ mod test {
     fn test_sql_crud() {
         let mut sql = SqlTable::new(1, true);
         let v = vec![1., 2.];
-        let hash: Hash = vec![0, 2];
-        sql.put(hash, &v, 0);
+        for hash in &[vec![1, 2], vec![2, 3]] {
+            sql.put(hash.clone(), &v, 0);
+        }
+        // make one hash collision by repeating one hash
+        let hash = vec![1, 2];
+        sql.put(hash.clone(), &v, 0);
+        let bucket = sql.query_bucket(&hash, 0);
+        println!("{:?}", &bucket);
+        match bucket {
+            Ok(b) => assert!(b.contains(&0)),
+            _ => assert!(false),
+        }
     }
 
     #[test]

@@ -300,7 +300,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
         match self.hash_tables.query_bucket(hash, hash_table_idx) {
             Err(HashTableError::NotFound) => (),
             Ok(bucket) => {
-                *bucket_union = bucket_union.union(bucket).copied().collect();
+                *bucket_union = bucket_union.union(&bucket).copied().collect();
             }
             _ => panic!("Unexpected query result"),
         };

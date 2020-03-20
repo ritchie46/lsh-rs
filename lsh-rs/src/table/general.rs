@@ -35,7 +35,7 @@ pub trait HashTables {
     ) -> Result<(), HashTableError>;
 
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<&Bucket, HashTableError>;
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError>;
 
     fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError>;
 
