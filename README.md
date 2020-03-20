@@ -14,48 +14,48 @@
  ## Getting started
 
  ```rust
- use lsh_rs::LSH;
- // 2 rows w/ dimension 3.
- let p = &[vec![1., 1.5, 2.],
-         vec![2., 1.1, -0.3]];
+use lsh_rs::LSH;
+// 2 rows w/ dimension 3.
+let p = &[vec![1., 1.5, 2.],
+        vec![2., 1.1, -0.3]];
 
- // Do one time expensive preprocessing.
- let n_projections = 9;
- let n_hash_tables = 30;
- let dim = 3;
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).srp();
- lsh.store_vecs(p);
+// Do one time expensive preprocessing.
+let n_projections = 9;
+let n_hash_tables = 30;
+let dim = 3;
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).srp();
+lsh.store_vecs(p);
 
- // Query in sublinear time.
- let query = &[1.1, 1.2, 1.2];
- lsh.query_bucket(query);
+// Query in sublinear time.
+let query = &[1.1, 1.2, 1.2];
+lsh.query_bucket(query);
  ```
 
  ## Signed Random Projections
  LSH for maximum cosine similarity search.
  ```rust
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).srp();
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).srp();
  ```
 
  ## L2
  LSH for minimal L2 distance search.
 
  ```rust
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).srp();
- // hyper parameter r in https://arxiv.org/pdf/1411.3787.pdf (eq. 8)
- let bucket_width = 2.2;
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).l2(bucket_width);
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).srp();
+// hyper parameter r in https://arxiv.org/pdf/1411.3787.pdf (eq. 8)
+let bucket_width = 2.2;
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).l2(bucket_width);
  ```
 
  ## Maximum Inner Product (MIPS)
  LSH for maximum inner product search.
  ```rust
- let bucket_width = 2.2;
- // l2(x) < U < 1.0
- let U = 0.83;
- // number of concatenations
- let m = 3;
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).mips(r, U, m);
+let bucket_width = 2.2;
+// l2(x) < U < 1.0
+let U = 0.83;
+// number of concatenations
+let m = 3;
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).mips(r, U, m);
  ```
 
  ## Seed
@@ -63,7 +63,7 @@
  is taken from the system. If you want to have reproducable outcomes, you can set a manual seed.
 
 ```rust
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).seed(12).srp();
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).seed(12).srp();
  ```
 
  ## Unique indexes
@@ -71,7 +71,7 @@
  hash table). You can choose to only store unique indexes of the data points. The index ids are
  assigned in chronological order. This will drastically decrease the required memory.
 ```rust
- let mut lsh = LSH::new(n_projections, n_hash_tables, dim).only_index().srp();
+let mut lsh: LSH<MemoryTable, _> = LSH::new(n_projections, n_hash_tables, dim).only_index().srp();
  ```
 
  ## BLAS support

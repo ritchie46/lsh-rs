@@ -1,7 +1,7 @@
 #![cfg(feature = "stats")]
 use crate::utils::l2_norm;
 use crate::DataPoint;
-use crate::LSH;
+use crate::{MemoryTable, LSH};
 use ndarray::aview1;
 use rayon::prelude::*;
 use statrs::{
@@ -58,7 +58,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
     let result: Vec<OptRes> = params
         .par_iter()
         .map(|&(r, k, l)| {
-            let mut lsh = LSH::new(k, l, dim).l2(r as f32);
+            let mut lsh: LSH<MemoryTable, _> = LSH::new(k, l, dim).l2(r as f32);
             lsh.store_vecs(vs);
             let mut search_time = 0.;
             let mut hash_time = 0.;

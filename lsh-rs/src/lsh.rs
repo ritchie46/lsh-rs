@@ -37,7 +37,7 @@ pub struct LSH<T: HashTables, H: VecHash> {
     _multi_probe_n_probes: usize,
 }
 
-impl LSH<MemoryTable, SignRandomProjections> {
+impl<T: HashTables> LSH<T, SignRandomProjections> {
     /// Create a new SignRandomProjections LSH
     pub fn srp(&mut self) -> Self {
         let mut rng = create_rng(self._seed);
@@ -53,7 +53,7 @@ impl LSH<MemoryTable, SignRandomProjections> {
             n_projections: self.n_projections,
             hashers,
             dim: self.dim,
-            hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
+            hash_tables: T::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
             only_index_storage: self.only_index_storage,
             _multi_probe: self._multi_probe,
@@ -63,7 +63,7 @@ impl LSH<MemoryTable, SignRandomProjections> {
     }
 }
 
-impl LSH<MemoryTable, L2> {
+impl<T: HashTables> LSH<T, L2> {
     /// Create a new L2 LSH
     ///
     /// See hash function:
@@ -88,7 +88,7 @@ impl LSH<MemoryTable, L2> {
             n_projections: self.n_projections,
             hashers,
             dim: self.dim,
-            hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
+            hash_tables: T::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
             only_index_storage: self.only_index_storage,
             _multi_probe: self._multi_probe,
@@ -98,7 +98,7 @@ impl LSH<MemoryTable, L2> {
     }
 }
 
-impl LSH<MemoryTable, MIPS> {
+impl<T: HashTables> LSH<T, MIPS> {
     /// Create a new MIPS LSH
     ///
     /// Async hasher
@@ -125,7 +125,7 @@ impl LSH<MemoryTable, MIPS> {
             n_projections: self.n_projections,
             hashers,
             dim: self.dim,
-            hash_tables: MemoryTable::new(self.n_hash_tables, self.only_index_storage),
+            hash_tables: T::new(self.n_hash_tables, self.only_index_storage),
             _seed: self._seed,
             only_index_storage: self.only_index_storage,
             _multi_probe: self._multi_probe,
@@ -135,7 +135,7 @@ impl LSH<MemoryTable, MIPS> {
     }
 }
 
-impl<H: VecHash> LSH<MemoryTable, H> {
+impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -150,7 +150,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             n_projections,
             hashers: Vec::with_capacity(0),
             dim,
-            hash_tables: MemoryTable::new(n_hash_tables, true),
+            hash_tables: T::new(n_hash_tables, true),
             _seed: 0,
             only_index_storage: false,
             _multi_probe: false,
@@ -158,7 +158,9 @@ impl<H: VecHash> LSH<MemoryTable, H> {
             _multi_probe_n_probes: 16,
         }
     }
+}
 
+impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// Set seed of LSH
     /// # Arguments
     /// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
@@ -170,6 +172,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     /// Only store indexes of data points. The mapping of data point to indexes is done outside
     /// of the LSH struct.
     pub fn only_index(&mut self) -> &mut Self {
+        // TODO: Set only index and the vec store on the LSH struct
         self.only_index_storage = true;
         self
     }
@@ -194,9 +197,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     pub fn describe(&self) {
         self.hash_tables.describe();
     }
-}
 
-impl<H: VecHash> LSH<MemoryTable, H> {
     /// Store a single vector in storage. Returns id.
     ///
     /// # Arguments
@@ -204,7 +205,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     ///
     /// # Examples
     /// ```
-    ///let mut lsh = LSH::new(5, 10, 3).srp();
+    ///let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 10, 3).srp();
     ///let v = &[2., 3., 4.];
     ///let id = lsh.store_vec(v);
     /// ```
@@ -229,7 +230,7 @@ impl<H: VecHash> LSH<MemoryTable, H> {
     ///
     /// # Examples
     ///```
-    ///let mut lsh = LSH::new(5, 10, 3).srp();
+    ///let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 10, 3).srp();
     ///let vs = &[[2., 3., 4.],
     ///           [-1., -1., 1.]];
     ///let ids = lsh.store_vecs(vs);
@@ -393,7 +394,7 @@ mod test {
 
     #[test]
     fn test_hash_table() {
-        let mut lsh = LSH::new(5, 10, 3).seed(1).srp();
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 10, 3).seed(1).srp();
         let v1 = &[2., 3., 4.];
         let v2 = &[-1., -1., 1.];
         lsh.store_vec(v1);
@@ -409,13 +410,13 @@ mod test {
     #[test]
     fn test_index_only() {
         // Test if vec storage is increased
-        let mut lsh = LSH::new(5, 9, 3).seed(1).l2(2.);
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.);
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
         assert_eq!(lsh.hash_tables.vec_store.map.len(), 1);
 
         // Test if vec storage is empty
-        let mut lsh = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
         lsh.store_vec(v1);
         assert_eq!(lsh.hash_tables.vec_store.map.len(), 0);
         lsh.query_bucket_ids(v1);
@@ -423,7 +424,7 @@ mod test {
 
     #[test]
     fn test_serialization() {
-        let mut lsh = LSH::new(5, 9, 3).seed(1).l2(2.);
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.);
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
         let mut tmp = std::env::temp_dir();

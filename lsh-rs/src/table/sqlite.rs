@@ -59,7 +59,17 @@ pub struct SqlTable {
 }
 
 impl SqlTable {
-    pub fn new(n_hash_tables: usize, only_index_storage: bool) -> Self {
+    fn get_table_name(&self, hash_table: usize) -> Result<&str, HashTableError> {
+        let opt = self.table_names.get(hash_table);
+        match opt {
+            Some(tbl_name) => Ok(&tbl_name[..]),
+            None => Err(HashTableError::TableNotExist),
+        }
+    }
+}
+
+impl HashTables for SqlTable {
+    fn new(n_hash_tables: usize, only_index_storage: bool) -> Self {
         let conn = Connection::open_in_memory().expect("could not open sqlite");
 
         let mut table_names = Vec::with_capacity(n_hash_tables);
@@ -76,17 +86,6 @@ impl SqlTable {
             table_names,
         }
     }
-
-    fn get_table_name(&self, hash_table: usize) -> Result<&str, HashTableError> {
-        let opt = self.table_names.get(hash_table);
-        match opt {
-            Some(tbl_name) => Ok(&tbl_name[..]),
-            None => Err(HashTableError::TableNotExist),
-        }
-    }
-}
-
-impl HashTables for SqlTable {
     fn put(
         &mut self,
         hash: Hash,

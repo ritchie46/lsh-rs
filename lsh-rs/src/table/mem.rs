@@ -43,8 +43,12 @@ pub struct MemoryTable {
     counter: u32,
 }
 
-impl MemoryTable {
-    pub fn new(n_hash_tables: usize, only_index_storage: bool) -> Self {
+// impl MemoryTable {
+//
+// }
+
+impl HashTables for MemoryTable {
+    fn new(n_hash_tables: usize, only_index_storage: bool) -> Self {
         // TODO: Check the average number of vectors in the buckets.
         // this way the capacity can be approximated by the number of DataPoints that will
         // be stored.
@@ -58,9 +62,7 @@ impl MemoryTable {
             counter: 0,
         }
     }
-}
 
-impl HashTables for MemoryTable {
     fn put(
         &mut self,
         hash: Hash,
