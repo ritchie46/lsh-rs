@@ -35,6 +35,7 @@ pub struct LSH<T: HashTables, H: VecHash> {
     _multi_probe_n_perturbations: usize,
     /// Length of probing sequence
     _multi_probe_n_probes: usize,
+    _dump_path: String,
 }
 
 /// Create a new LSH instance. Used in the builder pattern
@@ -44,12 +45,13 @@ fn lsh_from_lsh<T: HashTables, H: VecHash>(lsh: &LSH<T, H>, hashers: Vec<H>) -> 
         n_projections: lsh.n_projections,
         hashers,
         dim: lsh.dim,
-        hash_tables: T::new(lsh.n_hash_tables, lsh.only_index_storage),
+        hash_tables: T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._dump_path),
         _seed: lsh._seed,
         only_index_storage: lsh.only_index_storage,
         _multi_probe: lsh._multi_probe,
         _multi_probe_n_perturbations: lsh._multi_probe_n_perturbations,
         _multi_probe_n_probes: lsh._multi_probe_n_probes,
+        _dump_path: lsh._dump_path.clone(),
     }
 }
 
@@ -133,12 +135,13 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             n_projections,
             hashers: Vec::with_capacity(0),
             dim,
-            hash_tables: T::new(n_hash_tables, true),
+            hash_tables: T::new(n_hash_tables, true, "."),
             _seed: 0,
             only_index_storage: false,
             _multi_probe: false,
             _multi_probe_n_perturbations: 3,
             _multi_probe_n_probes: 16,
+            _dump_path: ".".to_string(),
         }
     }
 }
@@ -155,7 +158,6 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// Only store indexes of data points. The mapping of data point to indexes is done outside
     /// of the LSH struct.
     pub fn only_index(&mut self) -> &mut Self {
-        // TODO: Set only index and the vec store on the LSH struct
         self.only_index_storage = true;
         self
     }
@@ -413,7 +415,7 @@ mod test {
         let mut tmp = std::env::temp_dir();
         tmp.push("lsh");
         std::fs::create_dir(&tmp);
-        tmp.push("serialized.cbor");
+        tmp.push("serialized.bincode");
         assert!(lsh.dump(&tmp).is_ok());
 
         // load from file

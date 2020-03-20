@@ -58,6 +58,16 @@ pub struct SqlTable {
     table_names: Vec<String>,
 }
 
+fn init_table(conn: &Connection, n_hash_tables: usize) -> DbResult<Vec<String>> {
+    let mut table_names = Vec::with_capacity(n_hash_tables);
+    for idx in 0..n_hash_tables {
+        let table_name = format!("hash_table_{}", idx);
+        make_table(&table_name, &conn)?;
+        table_names.push(table_name);
+    }
+    Ok(table_names)
+}
+
 impl SqlTable {
     fn get_table_name(&self, hash_table: usize) -> Result<&str, HashTableError> {
         let opt = self.table_names.get(hash_table);
@@ -66,18 +76,10 @@ impl SqlTable {
             None => Err(HashTableError::TableNotExist),
         }
     }
-}
 
-impl HashTables for SqlTable {
-    fn new(n_hash_tables: usize, only_index_storage: bool) -> Self {
+    fn new_in_mem(n_hash_tables: usize, only_index_storage: bool) -> Self {
         let conn = Connection::open_in_memory().expect("could not open sqlite");
-
-        let mut table_names = Vec::with_capacity(n_hash_tables);
-        for idx in 0..n_hash_tables {
-            let table_name = format!("hash_table_{}", idx);
-            make_table(&table_name, &conn).expect("could not create table");
-            table_names.push(table_name);
-        }
+        let table_names = init_table(&conn, n_hash_tables).expect("could not make tables");
         SqlTable {
             n_hash_tables,
             only_index_storage,
@@ -86,6 +88,21 @@ impl HashTables for SqlTable {
             table_names,
         }
     }
+}
+
+impl HashTables for SqlTable {
+    fn new(n_hash_tables: usize, only_index_storage: bool, dump_path: &str) -> Self {
+        let conn = Connection::open(dump_path).expect("could not open sqlite");
+        let table_names = init_table(&conn, n_hash_tables).expect("could not make tables");
+        SqlTable {
+            n_hash_tables,
+            only_index_storage,
+            counter: 0,
+            conn,
+            table_names,
+        }
+    }
+
     fn put(
         &mut self,
         hash: Hash,
@@ -156,7 +173,7 @@ mod test {
 
     #[test]
     fn test_sql_table_init() {
-        let sql = SqlTable::new(1, true);
+        let sql = SqlTable::new_in_mem(1, true);
         let mut stmt = sql
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
@@ -166,7 +183,7 @@ mod test {
 
     #[test]
     fn test_sql_crud() {
-        let mut sql = SqlTable::new(1, true);
+        let mut sql = SqlTable::new_in_mem(1, true);
         let v = vec![1., 2.];
         for hash in &[vec![1, 2], vec![2, 3]] {
             sql.put(hash.clone(), &v, 0);
