@@ -37,6 +37,22 @@ pub struct LSH<T: HashTables, H: VecHash> {
     _multi_probe_n_probes: usize,
 }
 
+/// Create a new LSH instance. Used in the builder pattern
+fn lsh_from_lsh<T: HashTables, H: VecHash>(lsh: &LSH<T, H>, hashers: Vec<H>) -> LSH<T, H> {
+    LSH {
+        n_hash_tables: lsh.n_hash_tables,
+        n_projections: lsh.n_projections,
+        hashers,
+        dim: lsh.dim,
+        hash_tables: T::new(lsh.n_hash_tables, lsh.only_index_storage),
+        _seed: lsh._seed,
+        only_index_storage: lsh.only_index_storage,
+        _multi_probe: lsh._multi_probe,
+        _multi_probe_n_perturbations: lsh._multi_probe_n_perturbations,
+        _multi_probe_n_probes: lsh._multi_probe_n_probes,
+    }
+}
+
 impl<T: HashTables> LSH<T, SignRandomProjections> {
     /// Create a new SignRandomProjections LSH
     pub fn srp(&mut self) -> Self {
@@ -48,18 +64,7 @@ impl<T: HashTables> LSH<T, SignRandomProjections> {
             let hasher = SignRandomProjections::new(self.n_projections, self.dim, seed);
             hashers.push(hasher);
         }
-        LSH {
-            n_hash_tables: self.n_hash_tables,
-            n_projections: self.n_projections,
-            hashers,
-            dim: self.dim,
-            hash_tables: T::new(self.n_hash_tables, self.only_index_storage),
-            _seed: self._seed,
-            only_index_storage: self.only_index_storage,
-            _multi_probe: self._multi_probe,
-            _multi_probe_n_perturbations: self._multi_probe_n_perturbations,
-            _multi_probe_n_probes: self._multi_probe_n_probes,
-        }
+        lsh_from_lsh(&self, hashers)
     }
 }
 
@@ -83,18 +88,7 @@ impl<T: HashTables> LSH<T, L2> {
             let hasher = L2::new(self.dim, r, self.n_projections, seed);
             hashers.push(hasher);
         }
-        LSH {
-            n_hash_tables: self.n_hash_tables,
-            n_projections: self.n_projections,
-            hashers,
-            dim: self.dim,
-            hash_tables: T::new(self.n_hash_tables, self.only_index_storage),
-            _seed: self._seed,
-            only_index_storage: self.only_index_storage,
-            _multi_probe: self._multi_probe,
-            _multi_probe_n_perturbations: self._multi_probe_n_perturbations,
-            _multi_probe_n_probes: self._multi_probe_n_probes,
-        }
+        lsh_from_lsh(&self, hashers)
     }
 }
 
@@ -120,18 +114,7 @@ impl<T: HashTables> LSH<T, MIPS> {
             let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
             hashers.push(hasher);
         }
-        LSH {
-            n_hash_tables: self.n_hash_tables,
-            n_projections: self.n_projections,
-            hashers,
-            dim: self.dim,
-            hash_tables: T::new(self.n_hash_tables, self.only_index_storage),
-            _seed: self._seed,
-            only_index_storage: self.only_index_storage,
-            _multi_probe: self._multi_probe,
-            _multi_probe_n_perturbations: self._multi_probe_n_perturbations,
-            _multi_probe_n_probes: self._multi_probe_n_probes,
-        }
+        lsh_from_lsh(&self, hashers)
     }
 }
 
