@@ -5,9 +5,10 @@ use crate::table::{
     mem::MemoryTable,
 };
 use crate::utils::create_rng;
-use crate::{DataPoint, DataPointSlice};
+use crate::{DataPoint, DataPointSlice, SqlTable};
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
+use rusqlite::Result as DbResult;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -320,6 +321,12 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             }
         }
         bucket_union
+    }
+}
+
+impl<T: VecHash> LSH<SqlTable, T> {
+    pub fn commit(&mut self) -> DbResult<()> {
+        self.hash_tables.commit()
     }
 }
 

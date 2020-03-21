@@ -135,7 +135,7 @@ impl SqlTable {
         }
     }
 
-    fn commit(&self) -> DbResult<()> {
+    pub fn commit(&self) -> DbResult<()> {
         if !self.committed.replace(true) {
             self.conn.execute_batch("COMMIT TRANSACTION;")?;
         }
