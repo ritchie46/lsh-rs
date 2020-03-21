@@ -431,5 +431,6 @@ mod test {
         let mut lsh: LSH<SqlTable, _> = LSH::new(5, 2, 3).seed(2).srp();
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
+        assert!(lsh.query_bucket_ids(v1).contains(&0));
     }
 }

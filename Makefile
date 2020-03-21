@@ -13,4 +13,4 @@ doc:
 	@cd lsh-rs && cargo doc --open
 
 clean-db:
-	@rm */**.db3
+	-@rm */**.db3

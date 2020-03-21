@@ -3,6 +3,7 @@ use crate::hash::{Hash, HashPrimitive};
 use crate::{DataPoint, DataPointSlice};
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, Error as DbError, Result as DbResult};
+use std::cell::Cell;
 use std::mem;
 
 fn hash_to_blob(hash: &[i32]) -> &[u8] {
@@ -16,7 +17,7 @@ fn blob_to_hash(blob: &[u8]) -> &[i32] {
 }
 
 fn query_bucket(blob: &[u8], table_name: &str, connection: &Connection) -> DbResult<Bucket> {
-    let mut stmt = connection.prepare(&format!(
+    let mut stmt = connection.prepare_cached(&format!(
         "
 SELECT (id) FROM {}
 WHERE hash = ?
@@ -35,7 +36,7 @@ WHERE hash = ?
 fn make_table(table_name: &str, connection: &Connection) -> DbResult<()> {
     connection.execute(
         &format!(
-            "CREATE TABLE {} (
+            "CREATE TABLE IF NOT EXISTS {} (
              hash       BLOB,
              id         INTEGER,
              PRIMARY KEY (hash, id)
@@ -70,16 +71,14 @@ fn insert_table(
     connection: &Connection,
 ) -> DbResult<usize> {
     let blob = hash_to_blob(hash);
-    connection.execute(
-        &format!(
-            "
+    let mut stmt = connection.prepare_cached(&format!(
+        "
 INSERT INTO {} (hash, id)
 VALUES (?1, ?2)
         ",
-            table_name
-        ),
-        params![blob, idx],
-    )
+        table_name
+    ))?;
+    stmt.execute(params![blob, idx])
 }
 
 ///
@@ -90,6 +89,7 @@ pub struct SqlTable {
     counter: u32,
     conn: Connection,
     table_names: Vec<String>,
+    committed: Cell<bool>,
 }
 
 fn get_table_names(n_hash_tables: usize) -> Vec<String> {
@@ -117,17 +117,34 @@ impl SqlTable {
         }
     }
 
-    fn new_in_mem(n_hash_tables: usize, only_index_storage: bool) -> Self {
-        let conn = Connection::open_in_memory().expect("could not open sqlite");
+    fn init_from_conn(
+        n_hash_tables: usize,
+        only_index_storage: bool,
+        conn: Connection,
+    ) -> SqlTable {
         let table_names = get_table_names(n_hash_tables);
         init_table(&conn, &table_names).expect("could not make tables");
+        conn.execute_batch("BEGIN TRANSACTION;").expect("db error");
         SqlTable {
             n_hash_tables,
             only_index_storage,
             counter: 0,
             conn,
             table_names,
+            committed: Cell::new(false),
         }
+    }
+
+    fn commit(&self) -> DbResult<()> {
+        if !self.committed.replace(true) {
+            self.conn.execute_batch("COMMIT TRANSACTION;")?;
+        }
+        Ok(())
+    }
+
+    pub fn new_in_mem(n_hash_tables: usize, only_index_storage: bool) -> Self {
+        let conn = Connection::open_in_memory().expect("could not open sqlite");
+        SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn)
     }
 }
 
@@ -136,18 +153,7 @@ impl HashTables for SqlTable {
         let mut path = std::path::Path::new(db_dir);
         let buf = path.with_file_name("lsh.db3");
         let conn = Connection::open(&buf).expect("could not open sqlite");
-        let table_names = get_table_names(n_hash_tables);
-
-        if let Ok(false) = table_exists(&table_names[0], &conn) {
-            init_table(&conn, &table_names).expect("could not make tables");
-        }
-        SqlTable {
-            n_hash_tables,
-            only_index_storage,
-            counter: 0,
-            conn,
-            table_names,
-        }
+        SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn)
     }
 
     fn put(
@@ -186,6 +192,7 @@ impl HashTables for SqlTable {
 
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
+        self.commit();
         let table_name = self.get_table_name(hash_table)?;
         let blob = hash_to_blob(hash);
         let res = query_bucket(blob, table_name, &self.conn);

@@ -100,7 +100,7 @@ mod table {
 pub mod utils;
 pub use crate::lsh::LSH;
 pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
-pub use table::{mem::MemoryTable, sqlite::SqlTable};
+pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable};
 #[cfg(feature = "stats")]
 pub mod stats;
 
