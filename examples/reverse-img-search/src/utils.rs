@@ -1,4 +1,4 @@
-use crate::DISTANCE_R;
+use crate::constants::DISTANCE_R;
 use lsh_rs::{MemoryTable, L2, LSH};
 use ndarray::prelude::*;
 use std::fs;
@@ -16,7 +16,7 @@ pub fn read_vec(path: &str) -> Vec<f32> {
     let mut f = fs::File::open(path).unwrap();
     let mut buf: Vec<u8> = vec![];
     f.read_to_end(&mut buf);
-    serde_cbor::from_slice(&buf).unwrap()
+    bincode::deserialize(&buf).unwrap()
 }
 
 pub fn sorted_paths(folder: &str) -> Vec<PathBuf> {

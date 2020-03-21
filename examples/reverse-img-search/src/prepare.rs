@@ -1,6 +1,6 @@
+use crate::constants::{BREAK_100, DISTANCE_R, IMG_HEIGHT, IMG_WIDTH, N_TOTAL};
 use crate::utils::{read_vec, sorted_paths};
-use crate::{BREAK_100, DISTANCE_R, N_TOTAL};
-use image::{GenericImage, GenericImageView};
+use image::{GenericImage, GenericImageView, ImageResult};
 use lsh_rs::{
     stats::{estimate_l, l2_ph, optimize_l2_params},
     utils::l2_norm,
@@ -12,20 +12,31 @@ use std::fs;
 use std::fs::{DirEntry, ReadDir};
 use std::io::Write;
 
+pub fn convert_img<P>(path: P) -> ImageResult<Vec<f32>>
+where
+    P: AsRef<std::path::Path>,
+{
+    let img = image::open(path)?;
+    let img = img.thumbnail_exact(IMG_WIDTH as u32, IMG_HEIGHT as u32);
+    let v: Vec<f32> = img.to_bytes().iter().map(|&x| (x as f32)).collect();
+    Ok(v)
+}
+
 pub fn create_img_vecs(folder: &str, out_folder: &str) -> Result<(), Box<dyn std::error::Error>> {
     let files = fs::read_dir(folder)?;
     let files: Vec<DirEntry> = files.map(|e| e.unwrap()).collect();
 
     files.par_iter().for_each(|entry| {
-        let img = image::open(entry.path()).unwrap();
-        let img = img.thumbnail_exact(90, 90);
-        let v: Vec<f32> = img.to_bytes().iter().map(|&x| (x as f32) / 255.).collect();
+        let v = match convert_img(entry.path()) {
+            Ok(v) => v,
+            Err(_) => panic!("cold not read image."),
+        };
 
         let original_name = entry.file_name();
         let new_name = original_name.to_str().unwrap().split('.').next().unwrap();
 
         let mut f = fs::File::create(format!("{}/{}", out_folder, new_name)).unwrap();
-        let buf = serde_cbor::to_vec(&v).unwrap();
+        let buf = bincode::serialize(&v).unwrap();
         f.write(&buf).unwrap();
         println!("{:?}", new_name)
     });
