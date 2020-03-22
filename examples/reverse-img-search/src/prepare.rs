@@ -11,35 +11,48 @@ use rayon::prelude::*;
 use std::fs;
 use std::fs::{DirEntry, ReadDir};
 use std::io::Write;
+use rusqlite::{Connection, named_params, Result as DbResult};
+use std::path::PathBuf;
 
-pub fn convert_img<P>(path: P) -> ImageResult<Vec<f32>>
+pub fn convert_img<P>(path: P) -> ImageResult<Vec<u8>>
 where
     P: AsRef<std::path::Path>,
 {
     let img = image::open(path)?;
     let img = img.thumbnail_exact(IMG_WIDTH as u32, IMG_HEIGHT as u32);
-    let v: Vec<f32> = img.to_bytes().iter().map(|&x| (x as f32)).collect();
+    let v: Vec<u8> = img.to_bytes();
     Ok(v)
 }
 
-pub fn create_img_vecs(folder: &str, out_folder: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn create_img_vecs(folder: &str, conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
     let files = fs::read_dir(folder)?;
     let files: Vec<DirEntry> = files.map(|e| e.unwrap()).collect();
+    conn.execute_batch("BEGIN TRANSACTION;")?;
+    let mut stmt = conn.prepare("
+    INSERT INTO vecs (path, vec) VALUES (:path, :vec)
+    ")?;
 
-    files.par_iter().for_each(|entry| {
-        let v = match convert_img(entry.path()) {
-            Ok(v) => v,
-            Err(_) => panic!("cold not read image."),
-        };
+    let mut c = 0;
+    let chunk_size = 10000;
 
-        let original_name = entry.file_name();
-        let new_name = original_name.to_str().unwrap().split('.').next().unwrap();
+    files.chunks(chunk_size).for_each(|chunk| {
+        let vecs: Vec<(PathBuf, Vec<u8>)> = chunk.par_iter().map(|entry| {
+            let path = entry.path();
+            let v = match convert_img(&path) {
+                Ok(v) => v,
+                Err(_) => panic!("cold not read image."),
+            };
+            (path, v)
+        }).collect();
+        c += chunk_size;
+        println!("{:?}", c);
 
-        let mut f = fs::File::create(format!("{}/{}", out_folder, new_name)).unwrap();
-        let buf = bincode::serialize(&v).unwrap();
-        f.write(&buf).unwrap();
-        println!("{:?}", new_name)
+        vecs.iter().for_each(|(path, v)| {
+            stmt.execute_named(named_params!{":path": path.as_path().to_str().unwrap(), ":vec": v}).expect("failing insert");
+        })
     });
+
+    conn.execute_batch("COMMIT TRANSACTION;")?;
     Ok(())
 }
 

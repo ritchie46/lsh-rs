@@ -22,7 +22,7 @@ pub fn query_image(vec_folder: &str, serialize_folder: &str, img_folder: &str) {
         .into_string()
         .unwrap();
 
-    let mut lsh = load_lsh(serialize_folder);
+    let lsh = load_lsh(serialize_folder);
 
     let file_names: Vec<String> = sorted_paths(vec_folder)
         .iter()

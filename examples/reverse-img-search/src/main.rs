@@ -11,6 +11,8 @@ use crate::query::query_image;
 use crate::utils::load_lsh;
 use ndarray::prelude::*;
 use std::io::Write;
+use std::process::exit;
+use rusqlite::Connection;
 
 fn show_usage_msg() {
     println!(
@@ -38,13 +40,22 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
 
+    let mut db_file = std::fs::canonicalize(".").unwrap();
+    db_file.push("ris.db3");
+    let conn = Connection::open(db_file).expect("could not open db");
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS vecs (
+        path        TEXT PRIMARY KEY,
+        vec         BLOB
+    )");
+
+
     if args.len() == 1 {
         show_usage_msg();
         std::process::exit(0);
     }
     match &args[1][..] {
         "prepare-intermediate-vectors" => {
-            create_img_vecs(&img_folder, &vec_folder);
+            create_img_vecs(&img_folder, &conn);
         }
         "describe" => {
             describe_vecs(&vec_folder);
