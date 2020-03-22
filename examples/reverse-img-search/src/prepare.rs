@@ -8,10 +8,10 @@ use lsh_rs::{
 };
 use ndarray::prelude::*;
 use rayon::prelude::*;
+use rusqlite::{named_params, Connection, Result as DbResult};
 use std::fs;
 use std::fs::{DirEntry, ReadDir};
 use std::io::Write;
-use rusqlite::{Connection, named_params, Result as DbResult};
 use std::path::PathBuf;
 
 pub fn convert_img<P>(path: P) -> ImageResult<Vec<u8>>
@@ -28,27 +28,35 @@ pub fn create_img_vecs(folder: &str, conn: &Connection) -> Result<(), Box<dyn st
     let files = fs::read_dir(folder)?;
     let files: Vec<DirEntry> = files.map(|e| e.unwrap()).collect();
     conn.execute_batch("BEGIN TRANSACTION;")?;
-    let mut stmt = conn.prepare("
+    let mut stmt = conn.prepare(
+        "
     INSERT INTO vecs (path, vec) VALUES (:path, :vec)
-    ")?;
+    ",
+    )?;
 
     let mut c = 0;
     let chunk_size = 10000;
 
     files.chunks(chunk_size).for_each(|chunk| {
-        let vecs: Vec<(PathBuf, Vec<u8>)> = chunk.par_iter().map(|entry| {
-            let path = entry.path();
-            let v = match convert_img(&path) {
-                Ok(v) => v,
-                Err(_) => panic!("cold not read image."),
-            };
-            (path, v)
-        }).collect();
+        let vecs: Vec<(PathBuf, Vec<u8>)> = chunk
+            .par_iter()
+            .map(|entry| {
+                let path = entry.path();
+                let v = match convert_img(&path) {
+                    Ok(v) => v,
+                    Err(_) => panic!("cold not read image."),
+                };
+                (path, v)
+            })
+            .collect();
         c += chunk_size;
         println!("{:?}", c);
 
         vecs.iter().for_each(|(path, v)| {
-            stmt.execute_named(named_params!{":path": path.as_path().to_str().unwrap(), ":vec": v}).expect("failing insert");
+            stmt.execute_named(
+                named_params! {":path": path.as_path().to_str().unwrap(), ":vec": v},
+            )
+            .expect("failing insert");
         })
     });
 

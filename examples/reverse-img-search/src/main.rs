@@ -10,9 +10,9 @@ use crate::prepare::{create_img_vecs, describe_vecs, make_lsh, optimize_params};
 use crate::query::query_image;
 use crate::utils::load_lsh;
 use ndarray::prelude::*;
+use rusqlite::Connection;
 use std::io::Write;
 use std::process::exit;
-use rusqlite::Connection;
 
 fn show_usage_msg() {
     println!(
@@ -43,11 +43,12 @@ fn main() {
     let mut db_file = std::fs::canonicalize(".").unwrap();
     db_file.push("ris.db3");
     let conn = Connection::open(db_file).expect("could not open db");
-    conn.execute_batch("CREATE TABLE IF NOT EXISTS vecs (
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS vecs (
         path        TEXT PRIMARY KEY,
         vec         BLOB
-    )");
-
+    )",
+    );
 
     if args.len() == 1 {
         show_usage_msg();
