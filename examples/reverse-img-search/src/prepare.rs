@@ -64,22 +64,22 @@ pub fn create_img_vecs(folder: &str, conn: &Connection) -> Result<(), Box<dyn st
     Ok(())
 }
 
-pub fn optimize_params(vec_folder: &str, n: usize) -> Result<(), Box<dyn std::error::Error>> {
-    let delta = 0.10;
-
-    let vs: Vec<Vec<f32>> = sorted_paths(vec_folder)
-        .iter()
-        .zip(0..n)
-        .map(|(path, i)| {
-            let v = read_vec(path.to_str().unwrap());
-            let v = aview1(&v);
-            let v = &v / DISTANCE_R;
+pub fn optimize_params(
+    n: usize,
+    delta: f64,
+    conn: &Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let vs: Vec<Vec<f32>> = select_vec_by_row_ids(0, n, conn)
+        .expect("could not get vecs from db")
+        .par_iter()
+        .map(|v| {
+            let v: Vec<f32> = v.iter().map(|&x| x as f32).collect();
+            let v = &aview1(&v) / DISTANCE_R;
             v.to_vec()
         })
         .collect();
 
     let dim = vs[0].len();
-
     let mut results = optimize_l2_params(delta, dim, &vs);
 
     // now only ran on a sample n of N.

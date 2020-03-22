@@ -26,7 +26,6 @@ Subcommands:
     describe <# of samples>
     make-lsh
     sample-params
-    load
     query
         "
     );
@@ -74,10 +73,7 @@ fn main() {
             );
         }
         "sample-params" => {
-            optimize_params(&vec_folder, 250);
-        }
-        "load" => {
-            load_lsh(&ser_folder);
+            optimize_params(250, 0.1, &conn);
         }
         "query" => {
             query_image(&vec_folder, &ser_folder, &img_folder);
