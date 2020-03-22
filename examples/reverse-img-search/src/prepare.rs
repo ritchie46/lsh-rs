@@ -1,5 +1,5 @@
 use crate::constants::{BREAK_100, DISTANCE_R, IMG_HEIGHT, IMG_WIDTH, N_TOTAL};
-use crate::utils::{read_vec, sorted_paths};
+use crate::utils::{read_vec, select_vec_by_row_ids, sorted_paths};
 use image::{GenericImage, GenericImageView, ImageResult};
 use lsh_rs::{
     stats::{estimate_l, l2_ph, optimize_l2_params},
@@ -97,15 +97,13 @@ pub fn optimize_params(vec_folder: &str, n: usize) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-pub fn describe_vecs(folder: &str) -> Result<(), std::io::Error> {
-    let mut l2_norms = vec![];
+pub fn describe_vecs(conn: &Connection, n: usize) -> Result<(), std::io::Error> {
+    let mut l2_norms = Vec::with_capacity(n);
     let mut c = 0;
+    let vs = select_vec_by_row_ids(0, n, conn).expect("could not get vecs from db");
 
-    for p in sorted_paths(folder) {
-        let v = read_vec(p.to_str().unwrap());
-        print!("{}\r", c);
-        std::io::stdout().flush().unwrap();
-        c += 1;
+    for v in vs {
+        let v: Vec<f32> = v.iter().map(|&x| x as f32).collect();
         let l2 = l2_norm(aview1(&v));
         l2_norms.push(l2);
         if c > 100 && BREAK_100 {

@@ -23,7 +23,7 @@ Usage:
 
 Subcommands:
     prepare-intermediate-vectors
-    describe
+    describe <# of samples>
     make-lsh
     sample-params
     load
@@ -59,7 +59,8 @@ fn main() {
             create_img_vecs(&img_folder, &conn);
         }
         "describe" => {
-            describe_vecs(&vec_folder);
+            let n: usize = args[2].parse().expect("n not properly defined");
+            describe_vecs(&conn, n);
         }
         "make-lsh" => {
             make_lsh(
