@@ -1,6 +1,7 @@
 use crate::hash::Hash;
-use crate::{DataPoint, DataPointSlice};
+use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet as HashSet;
+use serde::Serialize;
 
 /// Bucket contains indexes to VecStore
 pub type Bucket = HashSet<u32>;
@@ -41,7 +42,14 @@ pub trait HashTables {
 
     fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError>;
 
-    fn increase_storage(&mut self, size: usize);
+    fn increase_storage(&mut self, size: usize) {}
 
-    fn describe(&self);
+    fn describe(&self) {}
+
+    fn store_hashers<H: VecHash + Serialize>(
+        &self,
+        hashers: &[H],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
 }

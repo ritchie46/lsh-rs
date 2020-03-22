@@ -40,7 +40,11 @@ pub struct LSH<T: HashTables, H: VecHash> {
 }
 
 /// Create a new LSH instance. Used in the builder pattern
-fn lsh_from_lsh<T: HashTables, H: VecHash>(lsh: &LSH<T, H>, hashers: Vec<H>) -> LSH<T, H> {
+fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize>(
+    lsh: &LSH<T, H>,
+    hashers: Vec<H>,
+) -> LSH<T, H> {
+    lsh.hash_tables.store_hashers(&hashers);
     LSH {
         n_hash_tables: lsh.n_hash_tables,
         n_projections: lsh.n_projections,
@@ -324,7 +328,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     }
 }
 
-impl<T: VecHash> LSH<SqlTable, T> {
+impl<T: VecHash + Serialize> LSH<SqlTable, T> {
     pub fn commit(&mut self) -> DbResult<()> {
         self.hash_tables.commit()
     }
@@ -344,7 +348,7 @@ struct IntermediatBlob {
 
 impl<H> LSH<MemoryTable, H>
 where
-    H: Serialize + DeserializeOwned + VecHash + std::marker::Sync,
+    H: Serialize + DeserializeOwned + VecHash,
 {
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::open(path)?;

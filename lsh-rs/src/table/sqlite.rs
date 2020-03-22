@@ -1,8 +1,9 @@
 use super::general::{Bucket, HashTableError, HashTables};
 use crate::hash::{Hash, HashPrimitive};
-use crate::{DataPoint, DataPointSlice};
+use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, Error as DbError, Result as DbResult};
+use serde::Serialize;
 use std::cell::Cell;
 use std::mem;
 
@@ -34,18 +35,15 @@ WHERE hash = ?
 }
 
 fn make_table(table_name: &str, connection: &Connection) -> DbResult<()> {
-    connection.execute(
-        &format!(
-            "CREATE TABLE IF NOT EXISTS {} (
+    connection.execute_batch(&format!(
+        "CREATE TABLE IF NOT EXISTS {} (
              hash       BLOB,
              id         INTEGER,
              PRIMARY KEY (hash, id)
             )
                 ",
-            table_name
-        ),
-        params![],
-    )?;
+        table_name
+    ))?;
     Ok(())
 }
 
@@ -207,9 +205,22 @@ impl HashTables for SqlTable {
         Err(HashTableError::NotImplemented)
     }
 
-    fn increase_storage(&mut self, size: usize) {}
-
-    fn describe(&self) {}
+    fn store_hashers<H: VecHash + Serialize>(
+        &self,
+        hashers: &[H],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let buf: Vec<u8> = bincode::serialize(hashers)?;
+        self.conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS state (
+            hashers     BLOB
+        )",
+        )?;
+        let mut stmt = self
+            .conn
+            .prepare("INSERT INTO state (hashers) VALUES (?1)")?;
+        stmt.execute(params![buf])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
