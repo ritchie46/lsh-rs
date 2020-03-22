@@ -3,4 +3,4 @@ Cargo.lock
 .idea/
 *.so
 .ENV
-*.db3
+*.db3*

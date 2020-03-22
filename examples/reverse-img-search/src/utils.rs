@@ -1,6 +1,7 @@
 use crate::constants::DISTANCE_R;
 use lsh_rs::{MemoryTable, L2, LSH};
 use ndarray::prelude::*;
+use rayon::prelude::*;
 use rusqlite::{named_params, Connection, Result as DbResult};
 use std::fs;
 use std::fs::DirEntry;
@@ -33,6 +34,22 @@ WHERE ROWID BETWEEN :lower AND :upper;
         vecs.push(v);
     }
     Ok(vecs)
+}
+
+pub fn select_and_scale_vecs(
+    lower: usize,
+    higher: usize,
+    conn: &Connection,
+) -> DbResult<Vec<Vec<f32>>> {
+    let vs: Vec<Vec<f32>> = select_vec_by_row_ids(lower, higher, conn)?
+        .par_iter()
+        .map(|v| {
+            let v: Vec<f32> = v.iter().map(|&x| x as f32).collect();
+            let v = &aview1(&v) / DISTANCE_R;
+            v.to_vec()
+        })
+        .collect();
+    Ok(vs)
 }
 
 pub fn read_vec(path: &str) -> Vec<f32> {

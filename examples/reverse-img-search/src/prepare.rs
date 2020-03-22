@@ -1,14 +1,14 @@
 use crate::constants::{BREAK_100, DISTANCE_R, IMG_HEIGHT, IMG_WIDTH, N_TOTAL};
-use crate::utils::{read_vec, select_vec_by_row_ids, sorted_paths};
+use crate::utils::{read_vec, select_and_scale_vecs, select_vec_by_row_ids, sorted_paths};
 use image::{GenericImage, GenericImageView, ImageResult};
 use lsh_rs::{
     stats::{estimate_l, l2_ph, optimize_l2_params},
     utils::l2_norm,
-    LSH,
+    SqlTable, LSH,
 };
 use ndarray::prelude::*;
 use rayon::prelude::*;
-use rusqlite::{named_params, Connection, Result as DbResult};
+use rusqlite::{named_params, params, Connection, Result as DbResult};
 use std::fs;
 use std::fs::{DirEntry, ReadDir};
 use std::io::Write;
@@ -64,21 +64,12 @@ pub fn create_img_vecs(folder: &str, conn: &Connection) -> Result<(), Box<dyn st
     Ok(())
 }
 
-pub fn optimize_params(
+pub fn sample_params(
     n: usize,
     delta: f64,
     conn: &Connection,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let vs: Vec<Vec<f32>> = select_vec_by_row_ids(0, n, conn)
-        .expect("could not get vecs from db")
-        .par_iter()
-        .map(|v| {
-            let v: Vec<f32> = v.iter().map(|&x| x as f32).collect();
-            let v = &aview1(&v) / DISTANCE_R;
-            v.to_vec()
-        })
-        .collect();
-
+    let vs = select_and_scale_vecs(0, n, conn).expect("could not get vecs");
     let dim = vs[0].len();
     let mut results = optimize_l2_params(delta, dim, &vs);
 
@@ -93,7 +84,6 @@ pub fn optimize_params(
         let t = opt_res.hash_time + opt_res.search_time * search_time_factor;
         println!("{:?}, total time: {}", opt_res, t);
     }
-
     Ok(())
 }
 
@@ -120,35 +110,31 @@ pub fn describe_vecs(conn: &Connection, n: usize) -> Result<(), std::io::Error> 
 }
 
 pub fn make_lsh(
-    folder: &str,
-    serialize_folder: &str,
     n_projections: usize,
     n_hash_tables: usize,
     dim: usize,
     seed: u64,
     r: f32,
+    chunk_size: usize,
+    conn: &Connection,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut lsh = LSH::new(n_projections, n_hash_tables, dim)
+    let mut stmt = conn.prepare_cached("SELECT count(*) FROM vecs;").unwrap();
+    let n_total: i32 = stmt.query_row(params![], |row| row.get(0)).unwrap();
+    let n_total = n_total as usize;
+
+    let mut lsh: LSH<SqlTable, _> = LSH::new(n_projections, n_hash_tables, dim)
         .seed(seed)
-        .increase_storage(30000)
         .only_index()
         .l2(r);
 
-    let mut c = 0;
-
-    for p in sorted_paths(folder) {
-        let v = read_vec(p.to_str().unwrap());
-        c += 1;
-        print!("{}\r", c);
-        std::io::stdout().flush().unwrap();
-
-        let v = aview1(&v);
-        let v = &v / DISTANCE_R;
-
-        lsh.store_vec(&v.to_vec());
+    let mut prev_i = 0;
+    for i in (chunk_size..n_total).step_by(chunk_size) {
+        println!("{} until {}", prev_i, i);
+        let vs = select_and_scale_vecs(prev_i, i, conn).expect("could not get vecs from db");
+        prev_i = i;
+        lsh.store_vecs(&vs);
     }
-    lsh.describe();
-    lsh.dump(format!("{}/save.bincode", serialize_folder));
-
+    println!("indexing...");
+    lsh.commit();
     Ok(())
 }

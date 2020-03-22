@@ -6,7 +6,7 @@ mod prepare;
 mod query;
 mod utils;
 use crate::constants::{IMG_HEIGHT, IMG_WIDTH};
-use crate::prepare::{create_img_vecs, describe_vecs, make_lsh, optimize_params};
+use crate::prepare::{create_img_vecs, describe_vecs, make_lsh, sample_params};
 use crate::query::query_image;
 use crate::utils::load_lsh;
 use ndarray::prelude::*;
@@ -23,8 +23,8 @@ Usage:
 
 Subcommands:
     prepare-intermediate-vectors
-    describe <# of samples>
-    make-lsh
+    describe <no. of samples>
+    make-lsh <chunk-size>
     sample-params
     query
         "
@@ -62,18 +62,22 @@ fn main() {
             describe_vecs(&conn, n);
         }
         "make-lsh" => {
+            let chunk_size = match args.get(2) {
+                None => 5000,
+                Some(i) => i.parse().expect("chunk size not properly defined"),
+            };
             make_lsh(
-                &vec_folder,
-                &ser_folder,
                 19,
                 150,
                 IMG_WIDTH * IMG_HEIGHT * 3,
                 12,
                 4.,
+                chunk_size,
+                &conn,
             );
         }
         "sample-params" => {
-            optimize_params(250, 0.1, &conn);
+            sample_params(250, 0.1, &conn);
         }
         "query" => {
             query_image(&vec_folder, &ser_folder, &img_folder);
