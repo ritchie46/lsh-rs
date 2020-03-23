@@ -122,21 +122,28 @@ impl SqlTable {
     ) -> SqlTable {
         let table_names = get_table_names(n_hash_tables);
         init_table(&conn, &table_names).expect("could not make tables");
-        conn.execute_batch("BEGIN TRANSACTION;").expect("db error");
-        SqlTable {
+        let sql = SqlTable {
             n_hash_tables,
             only_index_storage,
             counter: 0,
             conn,
             table_names,
             committed: Cell::new(false),
-        }
+        };
+        sql.init_transaction();
+        sql
     }
 
     pub fn commit(&self) -> DbResult<()> {
         if !self.committed.replace(true) {
             self.conn.execute_batch("COMMIT TRANSACTION;")?;
         }
+        Ok(())
+    }
+
+    fn init_transaction(&self) -> DbResult<()> {
+        self.committed.set(false);
+        self.conn.execute_batch("BEGIN TRANSACTION;")?;
         Ok(())
     }
 
@@ -206,19 +213,25 @@ impl HashTables for SqlTable {
     }
 
     fn store_hashers<H: VecHash + Serialize>(
-        &self,
+        &mut self,
         hashers: &[H],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let buf: Vec<u8> = bincode::serialize(hashers)?;
+
+        // fails if already exists
         self.conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS state (
+            "CREATE TABLE state (
             hashers     BLOB
         )",
         )?;
         let mut stmt = self
             .conn
             .prepare("INSERT INTO state (hashers) VALUES (?1)")?;
+
+        // unlock database by committing any running transaction.
+        self.commit();
         stmt.execute(params![buf])?;
+        self.init_transaction();
         Ok(())
     }
 }

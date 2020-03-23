@@ -1,6 +1,7 @@
 use crate::hash::Hash;
 use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet as HashSet;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 /// Bucket contains indexes to VecStore
@@ -46,10 +47,18 @@ pub trait HashTables {
 
     fn describe(&self) {}
 
+    // Should fail if hashers already stored.
     fn store_hashers<H: VecHash + Serialize>(
-        &self,
+        &mut self,
         hashers: &[H],
     ) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
+    }
+
+    // If store_hashers fails, load_hasher can be executed
+    fn load_hashers<H: VecHash + DeserializeOwned>(
+        &self,
+    ) -> Result<(Vec<H>), Box<dyn std::error::Error>> {
+        Err(Box::new(std::fmt::Error))
     }
 }

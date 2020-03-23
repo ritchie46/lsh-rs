@@ -40,11 +40,18 @@ pub struct LSH<T: HashTables, H: VecHash> {
 }
 
 /// Create a new LSH instance. Used in the builder pattern
-fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize>(
-    lsh: &LSH<T, H>,
+fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
+    lsh: &mut LSH<T, H>,
     hashers: Vec<H>,
 ) -> LSH<T, H> {
-    lsh.hash_tables.store_hashers(&hashers);
+    // Load hashers if store hashers fails. (i.e. exists)
+    match lsh.hash_tables.store_hashers(&hashers) {
+        Ok(_) => {}
+        Err(_) => match lsh.hash_tables.load_hashers() {
+            Err(_) => panic!("could not load hashers"),
+            Ok(hashers) => lsh.hashers = hashers,
+        },
+    }
     LSH {
         n_hash_tables: lsh.n_hash_tables,
         n_projections: lsh.n_projections,
@@ -71,7 +78,7 @@ impl<T: HashTables> LSH<T, SignRandomProjections> {
             let hasher = SignRandomProjections::new(self.n_projections, self.dim, seed);
             hashers.push(hasher);
         }
-        lsh_from_lsh(&self, hashers)
+        lsh_from_lsh(self, hashers)
     }
 }
 
@@ -95,7 +102,7 @@ impl<T: HashTables> LSH<T, L2> {
             let hasher = L2::new(self.dim, r, self.n_projections, seed);
             hashers.push(hasher);
         }
-        lsh_from_lsh(&self, hashers)
+        lsh_from_lsh(self, hashers)
     }
 }
 
@@ -121,7 +128,7 @@ impl<T: HashTables> LSH<T, MIPS> {
             let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
             hashers.push(hasher);
         }
-        lsh_from_lsh(&self, hashers)
+        lsh_from_lsh(self, hashers)
     }
 }
 
