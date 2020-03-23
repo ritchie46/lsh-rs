@@ -48,7 +48,7 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
     match lsh.hash_tables.store_hashers(&hashers) {
         Ok(_) => {}
         Err(_) => match lsh.hash_tables.load_hashers() {
-            Err(_) => panic!("could not load hashers"),
+            Err(e) => panic!(format!("could not load hashers: {}", e)),
             Ok(hashers) => lsh.hashers = hashers,
         },
     }

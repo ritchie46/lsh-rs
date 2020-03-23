@@ -6,6 +6,7 @@ use rusqlite::{params, Connection, Error as DbError, Result as DbResult};
 use serde::Serialize;
 use std::cell::Cell;
 use std::mem;
+use serde::de::DeserializeOwned;
 
 fn hash_to_blob(hash: &[i32]) -> &[u8] {
     let data = hash.as_ptr() as *const u8;
@@ -233,6 +234,18 @@ impl HashTables for SqlTable {
         stmt.execute(params![buf])?;
         self.init_transaction();
         Ok(())
+    }
+
+    fn load_hashers<H: VecHash + DeserializeOwned>(
+        &self,
+    ) -> Result<(Vec<H>), Box<dyn std::error::Error>> {
+        let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
+        let buf: Vec<u8> = stmt.query_row(params![], |row| {
+            let v: Vec<u8> = row.get_unwrap(0);
+            Ok(v)
+        })?;
+        let hashers: Vec<H> = bincode::deserialize(&buf)?;
+        Ok(hashers)
     }
 }
 
