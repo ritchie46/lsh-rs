@@ -96,9 +96,10 @@ mod table {
     pub mod general;
     pub mod mem;
     pub mod sqlite;
+    pub mod sqlite_mem;
 }
 pub mod utils;
-pub use crate::lsh::LSH;
+pub use crate::lsh::{LshMem, LshSql, LshSqlMem, LSH};
 pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
 pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable};
 #[cfg(feature = "stats")]

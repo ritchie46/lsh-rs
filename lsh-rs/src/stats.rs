@@ -1,7 +1,9 @@
 #![cfg(feature = "stats")]
+use crate::hash::HashPrimitive;
 use crate::utils::l2_norm;
 use crate::DataPoint;
-use crate::{MemoryTable, LSH};
+use crate::{LshSqlMem, MemoryTable};
+use fnv::FnvHashSet;
 use ndarray::aview1;
 use rayon::prelude::*;
 use statrs::{
@@ -45,6 +47,7 @@ pub struct OptRes {
     pub min_len: usize,
     pub max_len: usize,
     pub avg_len: f32,
+    pub unique_hash_values: FnvHashSet<HashPrimitive>,
 }
 
 pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRes> {
@@ -58,7 +61,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
     let result: Vec<OptRes> = params
         .par_iter()
         .map(|&(r, k, l)| {
-            let mut lsh: LSH<MemoryTable, _> = LSH::new(k, l, dim).l2(r as f32);
+            let mut lsh = LshSqlMem::new(k, l, dim).l2(r as f32);
             lsh.store_vecs(vs);
             let mut search_time = 0.;
             let mut hash_time = 0.;
@@ -83,6 +86,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
             let min = *bucket_lengths.iter().min().unwrap_or(&(0 as usize));
             let max = *bucket_lengths.iter().max().unwrap_or(&(0 as usize));
             let avg = bucket_lengths.iter().sum::<usize>() as f32 / bucket_lengths.len() as f32;
+            let unique_hash_values = lsh.hash_tables.get_unique_hash_values();
             OptRes {
                 r,
                 k,
@@ -92,6 +96,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
                 min_len: min,
                 max_len: max,
                 avg_len: avg,
+                unique_hash_values,
             }
         })
         .collect();

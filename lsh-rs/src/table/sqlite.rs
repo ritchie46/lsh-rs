@@ -2,7 +2,7 @@ use super::general::{Bucket, HashTableError, HashTables};
 use crate::hash::{Hash, HashPrimitive};
 use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet;
-use rusqlite::{params, Connection, Error as DbError, Result as DbResult};
+use rusqlite::{params, Connection, Error as DbError, Result as DbResult, NO_PARAMS};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cell::Cell;
@@ -81,8 +81,6 @@ VALUES (?1, ?2)
     stmt.execute(params![blob, idx])
 }
 
-///
-/// Requirement on Debian: libsqlite3-dev
 pub struct SqlTable {
     n_hash_tables: usize,
     only_index_storage: bool, // for now only supported
@@ -103,6 +101,26 @@ fn get_table_names(n_hash_tables: usize) -> Vec<String> {
         table_names.push(table_name);
     }
     table_names
+}
+
+fn get_unique_hash_values(
+    n_hash_tables: usize,
+    conn: &Connection,
+) -> DbResult<FnvHashSet<HashPrimitive>> {
+    let mut hash_numbers = FnvHashSet::default();
+    for table_name in get_table_names(n_hash_tables) {
+        let mut stmt = conn.prepare(&format!["SELECT hash FROM {} LIMIT 100;", table_name])?;
+        let mut rows = stmt.query(NO_PARAMS)?;
+
+        while let Some(r) = rows.next()? {
+            let blob: Vec<u8> = r.get(0)?;
+            let hash = blob_to_hash(&blob);
+            hash.iter().for_each(|&v| {
+                hash_numbers.insert(v);
+            })
+        }
+    }
+    Ok(hash_numbers)
 }
 
 fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
@@ -153,9 +171,8 @@ impl SqlTable {
         Ok(())
     }
 
-    pub fn new_in_mem(n_hash_tables: usize, only_index_storage: bool) -> Self {
-        let conn = Connection::open_in_memory().expect("could not open sqlite");
-        SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn)
+    pub fn get_unique_hash_values(&self) -> FnvHashSet<HashPrimitive> {
+        get_unique_hash_values(self.n_hash_tables, &self.conn).unwrap()
     }
 }
 
@@ -218,6 +235,40 @@ impl HashTables for SqlTable {
         Err(HashTableError::NotImplemented)
     }
 
+    fn describe(&self) {
+        let mut stmt = match self.conn.prepare(
+            "SELECT name FROM sqlite_master
+WHERE type='table'
+ORDER BY name;",
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("Sqlite error: {:?}", e);
+                return;
+            }
+        };
+        let mut rows = match stmt.query(params![]) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("Sqlite error: {:?}", e);
+                return;
+            }
+        };
+        println!("Tables in sqlite backend:");
+        while let Ok(r) = rows.next() {
+            match r {
+                Some(r) => {
+                    let v: String = r.get_unwrap(0);
+                    println!("\t{:?}", v);
+                }
+                None => break,
+            }
+        }
+        println!("Unique hash values:");
+        let hv = get_unique_hash_values(self.n_hash_tables, &self.conn).unwrap();
+        println!("{:?}", hv)
+    }
+
     fn store_hashers<H: VecHash + Serialize>(
         &mut self,
         hashers: &[H],
@@ -250,46 +301,16 @@ impl HashTables for SqlTable {
         let hashers: Vec<H> = bincode::deserialize(&buf)?;
         Ok(hashers)
     }
-
-    fn describe(&self) {
-        let mut stmt = match self.conn.prepare(
-            "SELECT name FROM sqlite_master
-WHERE type='table'
-ORDER BY name;",
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                println!("Sqlite error: {:?}", e);
-                return;
-            }
-        };
-        let mut rows = match stmt.query(params![]) {
-            Ok(r) => r,
-            Err(e) => {
-                println!("Sqlite error: {:?}", e);
-                return;
-            }
-        };
-        println!("Tables in sqlite backend:");
-        while let Ok(r) = rows.next() {
-            match r {
-                Some(r) => {
-                    let v: String = r.get_unwrap(0);
-                    println!("\t{:?}", v);
-                }
-                None => break,
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::table::sqlite_mem::SqlTableMem;
 
     #[test]
     fn test_sql_table_init() {
-        let sql = SqlTable::new_in_mem(1, true);
+        let sql = SqlTableMem::new(1, true, ".");
         let mut stmt = sql
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
@@ -299,7 +320,7 @@ mod test {
 
     #[test]
     fn test_sql_crud() {
-        let mut sql = SqlTable::new_in_mem(1, true);
+        let mut sql = SqlTableMem::new(1, true, ".");
         let v = vec![1., 2.];
         for hash in &[vec![1, 2], vec![2, 3]] {
             sql.put(hash.clone(), &v, 0);

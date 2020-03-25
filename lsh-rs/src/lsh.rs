@@ -1,5 +1,6 @@
 use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
 use crate::multi_probe::create_hash_permutation;
+use crate::table::sqlite_mem::SqlTableMem;
 use crate::table::{
     general::{HashTableError, HashTables},
     mem::MemoryTable,
@@ -15,6 +16,10 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
+pub type LshSql<H> = LSH<SqlTable, H>;
+pub type LshSqlMem<H> = LSH<SqlTableMem, H>;
+pub type LshMem<H> = LSH<MemoryTable, H>;
+
 /// Wrapper for LSH functionality.
 pub struct LSH<T: HashTables, H: VecHash> {
     /// Number of hash tables. `M` in literature.
@@ -26,7 +31,7 @@ pub struct LSH<T: HashTables, H: VecHash> {
     /// Dimensions of p and q
     dim: usize,
     /// Storage data structure
-    hash_tables: T,
+    pub hash_tables: T,
     /// seed for hash functions. If 0, randomness is seeded from the os.
     _seed: u64,
     /// store only indexes and no data points.
@@ -202,9 +207,10 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Examples
     /// ```
-    ///let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 10, 3).srp();
-    ///let v = &[2., 3., 4.];
-    ///let id = lsh.store_vec(v);
+    /// use lsh_rs::LshSql;
+    /// let mut lshd = LshSql::new(5, 10, 3).srp();
+    /// let v = &[2., 3., 4.];
+    /// let id = lsh.store_vec(v);
     /// ```
     pub fn store_vec(&mut self, v: &DataPointSlice) -> u32 {
         let mut idx = 0;
@@ -227,10 +233,11 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Examples
     ///```
-    ///let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 10, 3).srp();
-    ///let vs = &[[2., 3., 4.],
-    ///           [-1., -1., 1.]];
-    ///let ids = lsh.store_vecs(vs);
+    /// use lsh_rs::LshSql;
+    /// let mut lsh = LshSql::new(5, 10, 3).srp();
+    /// let vs = &[vec![2., 3., 4.],
+    ///           vec![-1., -1., 1.]];
+    /// let ids = lsh.store_vecs(vs);
     /// ```
     pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Vec<u32> {
         self.hash_tables.increase_storage(vs.len());
@@ -447,14 +454,24 @@ mod test {
     #[test]
     fn test_db() {
         let v1 = &[2., 3., 4.];
-        let mut lsh: LSH<SqlTable, _> = LSH::new(5, 2, 3).seed(2).srp();
+        let mut lsh = LshSql::new(5, 2, 3).seed(2).srp();
         lsh.store_vec(v1);
         assert!(lsh.query_bucket_ids(v1).contains(&0));
         lsh.commit();
         lsh.describe();
 
-        let mut lsh2: LSH<SqlTable, _> = LSH::new(1, 1, 1).srp();
+        // tests if the same db is reused.
+        let mut lsh2 = LshSql::new(1, 1, 1).srp();
         lsh2.describe();
         assert!(lsh2.query_bucket_ids(v1).contains(&0));
+    }
+
+    #[test]
+    fn test_mem_db() {
+        let v1 = &[2., 3., 4.];
+        let mut lsh = LshSqlMem::new(5, 2, 3).seed(2).srp();
+        lsh.store_vec(v1);
+        assert!(lsh.query_bucket_ids(v1).contains(&0));
+        lsh.describe();
     }
 }
