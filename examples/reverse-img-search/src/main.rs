@@ -5,7 +5,7 @@ mod constants;
 mod prepare;
 mod query;
 mod utils;
-use crate::constants::{IMG_HEIGHT, IMG_WIDTH};
+use crate::constants::{IMG_HEIGHT, IMG_WIDTH, L};
 use crate::prepare::{create_img_vecs, describe_vecs, make_lsh, sample_params};
 use crate::query::query_image;
 use crate::utils::load_lsh;
@@ -26,7 +26,9 @@ Subcommands:
     describe <no. of samples>
     make-lsh <chunk-size>
     sample-params
-    query
+    query <img-path> <img-viewer>
+        Example:
+            query /home/johndoe/images/holiday.jpg firefox
         "
     );
     std::process::exit(0);
@@ -66,21 +68,16 @@ fn main() {
                 None => 5000,
                 Some(i) => i.parse().expect("chunk size not properly defined"),
             };
-            make_lsh(
-                19,
-                150,
-                IMG_WIDTH * IMG_HEIGHT * 3,
-                12,
-                4.,
-                chunk_size,
-                &conn,
-            );
+            make_lsh(19, L, IMG_WIDTH * IMG_HEIGHT * 3, 12, 4., chunk_size, &conn);
         }
         "sample-params" => {
             sample_params(250, 0.1, &conn);
         }
         "query" => {
-            query_image(&vec_folder, &ser_folder, &img_folder);
+            let img = args.get(2).expect("expected image path.");
+            let default = "firefox".to_string();
+            let img_viewer = args.get(3).unwrap_or(&default);
+            println!("{:?}", query_image(img, &img_viewer, &conn));
         }
         _ => {
             show_usage_msg();

@@ -1,69 +1,78 @@
+use crate::prepare::convert_img;
 use crate::utils::sorted_paths;
 use crate::{
-    query,
+    constants, query,
     utils::{load_lsh, read_vec, scale_vec},
 };
 use lsh_rs::utils::l2_norm;
+use lsh_rs::{SqlTable, LSH};
 use ndarray::aview1;
+use rusqlite::{params, types::Value, vtab::array, Connection};
 use std::fs;
 use std::path::Path;
+use std::process::Command;
+use std::rc::Rc;
 
-pub fn query_image(vec_folder: &str, serialize_folder: &str, img_folder: &str) {
-    let vec_basename = Path::new(vec_folder)
-        .file_stem()
-        .unwrap()
-        .to_owned()
-        .into_string()
-        .unwrap();
-    let img_basename = Path::new(img_folder)
-        .file_stem()
-        .unwrap()
-        .to_owned()
-        .into_string()
-        .unwrap();
+fn select_row_id(
+    row_ids: &[i64],
+    conn: &Connection,
+) -> rusqlite::Result<(Vec<String>, Vec<Vec<u8>>)> {
+    // https://github.com/jgallagher/rusqlite/blob/master/src/vtab/array.rs#L180
 
-    let mut lsh = load_lsh(serialize_folder);
+    array::load_module(conn).unwrap();
+    let values: Vec<Value> = row_ids.iter().map(|&i| Value::from(i)).collect();
+    let ptr = Rc::new(values);
+    let mut stmt = conn.prepare("SELECT path, vec FROM vecs WHERE ROWID IN rarray(?);")?;
+    let mut rows = stmt.query(&[&ptr])?;
 
-    let file_names: Vec<String> = sorted_paths(vec_folder)
+    let len = row_ids.len();
+    let mut vs: Vec<Vec<u8>> = Vec::with_capacity(len);
+    let mut paths: Vec<String> = Vec::with_capacity(len);
+    while let Some(r) = rows.next()? {
+        paths.push(r.get(0)?);
+        vs.push(r.get(1)?)
+    }
+    Ok((paths, vs))
+}
+
+pub fn query_image(
+    query_img_path: &str,
+    img_viewer: &str,
+    conn: &Connection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let v: Vec<f32> = convert_img(query_img_path)?
         .iter()
-        .map(|p| p.to_str().unwrap().to_owned())
+        .map(|&x| x as f32)
+        .collect();
+    let q = scale_vec(&v);
+    let mut lsh: LSH<SqlTable, _> = LSH::new(1, 1, 1).l2(1.);
+    let row_ids: Vec<i64> = lsh
+        .query_bucket_ids(&q)
+        .iter()
+        .map(|&x| (x + 1) as i64)
+        .take(constants::QUERY_L_FACT_UPPER_BOUND * constants::L)
         .collect();
 
-    for file_name in &file_names[20..] {
-        let q = read_vec(&file_name);
-        let q_scaled = scale_vec(&q);
-        let bucket = lsh.query_bucket_ids(&q_scaled);
+    let (paths, vs) = select_row_id(&row_ids, conn).expect("could not select by row id");
+    let mut scores: Vec<(f32, String)> = vs
+        .iter()
+        .zip(paths)
+        .map(|(v, path)| {
+            let v: Vec<f32> = v.iter().map(|&x| x as f32).collect();
+            let p = scale_vec(&v);
+            let dist = &aview1(&q) - &aview1(&p);
+            let l2 = l2_norm(dist.view());
+            (l2, path)
+        })
+        .collect();
+    scores.sort_unstable_by_key(|(l2, _)| (l2 * 1e3) as i32);
 
-        let mut results = bucket
-            .iter()
-            .map(|&id| {
-                let vec_file = &file_names[id as usize];
-                let p = read_vec(vec_file);
-
-                let dist = &aview1(&p) - &aview1(&q);
-                let l2 = l2_norm(dist.view());
-                let img_file = vec_file.replace(&vec_basename, &img_basename);
-                (l2, img_file)
-            })
-            .collect::<Vec<_>>();
-        results.sort_unstable_by_key(|(l2, _)| (l2 * 1e3) as i32);
-
-        let mut c = 0;
-        for (l2, img) in &results {
-            c += 1;
-            println!("firefox {}.jpg", img);
-            if c > 4 {
-                break;
-            }
-        }
-        c = 0;
-        for (l2, img) in results {
-            c += 1;
-            println!("l2 {}", l2);
-            if c > 4 {
-                break;
-            }
-        }
-        break;
+    println!("Top 3:");
+    for (l2, path) in &scores[..5] {
+        println!("Score: {}\t file: {}", l2, path);
+        let mut cmd = Command::new(img_viewer);
+        cmd.arg(path);
+        cmd.status();
     }
+    Ok(())
 }

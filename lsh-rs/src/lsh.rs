@@ -455,6 +455,6 @@ mod test {
 
         let mut lsh2: LSH<SqlTable, _> = LSH::new(1, 1, 1).srp();
         lsh2.describe();
-        lsh2.query_bucket_ids(v1);
+        assert!(lsh2.query_bucket_ids(v1).contains(&0));
     }
 }
