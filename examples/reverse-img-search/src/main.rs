@@ -22,7 +22,9 @@ Usage:
     RUN [SUBCOMMAND]
 
 Subcommands:
-    prepare-intermediate-vectors
+    prepare-intermediate-vectors <img-folder>
+        Example:
+           prepare-intermediate-vectors /home/johndoe/images
     describe <no. of samples>
     make-lsh <chunk-size>
     sample-params
@@ -35,10 +37,6 @@ Subcommands:
 }
 
 fn main() {
-    let img_folder = std::env::var("IMG_FOLDER").expect("IMG_FOLDER not set");
-    let vec_folder = std::env::var("VEC_FOLDER").expect("VEC_FOLDER not set");
-    let ser_folder = std::env::var("SERIALIZE_FOLDER").expect("SERIALIZE_FOLDER not set");
-
     let args: Vec<String> = std::env::args().collect();
 
     let mut db_file = std::fs::canonicalize(".").unwrap();
@@ -57,10 +55,16 @@ fn main() {
     }
     match &args[1][..] {
         "prepare-intermediate-vectors" => {
+            let img_folder = args.get(2).expect("image folder expected");
             create_img_vecs(&img_folder, &conn);
         }
         "describe" => {
-            let n: usize = args[2].parse().expect("n not properly defined");
+            let default = String::from("1000");
+            let n: usize = args
+                .get(2)
+                .unwrap_or(&default)
+                .parse()
+                .expect("n not properly defined");
             describe_vecs(&conn, n);
         }
         "make-lsh" => {
@@ -77,7 +81,7 @@ fn main() {
             let img = args.get(2).expect("expected image path.");
             let default = "firefox".to_string();
             let img_viewer = args.get(3).unwrap_or(&default);
-            println!("{:?}", query_image(img, &img_viewer, &conn));
+            query_image(img, &img_viewer, &conn);
         }
         _ => {
             show_usage_msg();
