@@ -1,8 +1,8 @@
 #![cfg(feature = "stats")]
 use crate::hash::HashPrimitive;
 use crate::utils::l2_norm;
-use crate::DataPoint;
-use crate::{LshSqlMem, MemoryTable};
+use crate::{DataPoint, LshMem};
+use crate::{HashTables, LshSqlMem, MemoryTable};
 use fnv::FnvHashSet;
 use ndarray::aview1;
 use rayon::prelude::*;
@@ -38,7 +38,7 @@ pub fn estimate_l(delta: f64, p1: f64, k: usize) -> usize {
 }
 
 #[derive(Debug)]
-pub struct OptRes {
+pub struct OptResL2 {
     pub r: f32,
     pub k: usize,
     pub l: usize,
@@ -50,7 +50,7 @@ pub struct OptRes {
     pub unique_hash_values: FnvHashSet<HashPrimitive>,
 }
 
-pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRes> {
+pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptResL2> {
     let mut params = vec![];
     let r = 4.0;
     let p1 = l2_ph(r as f64, 1.);
@@ -58,24 +58,25 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
         let l = estimate_l(delta, p1, k as usize);
         params.push((r, k, l))
     }
-    let result: Vec<OptRes> = params
+    let result: Vec<OptResL2> = params
         .par_iter()
         .map(|&(r, k, l)| {
-            let mut lsh = LshSqlMem::new(k, l, dim).l2(r as f32);
+            let mut lsh = LshMem::new(k, l, dim).l2(r as f32);
             lsh.store_vecs(vs);
             let mut search_time = 0.;
             let mut hash_time = 0.;
             let mut bucket_lengths = Vec::with_capacity(vs.len());
             for v in vs {
                 let th = Instant::now();
-                let mut bucket = lsh.query_bucket(v);
+                let mut bucket_ids = lsh.query_bucket_ids(v);
                 hash_time += th.elapsed().as_secs_f64();
 
-                bucket_lengths.push(bucket.len());
+                bucket_lengths.push(bucket_ids.len());
 
                 let t0 = Instant::now();
                 let q = aview1(&v);
-                bucket.sort_unstable_by_key(|&p| {
+                bucket_ids.sort_unstable_by_key(|&idx| {
+                    let p = &vs[idx as usize];
                     let dist = &aview1(&p) - &q;
                     let l2 = l2_norm(dist.view());
                     (l2 * 1e5) as i32
@@ -86,8 +87,8 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
             let min = *bucket_lengths.iter().min().unwrap_or(&(0 as usize));
             let max = *bucket_lengths.iter().max().unwrap_or(&(0 as usize));
             let avg = bucket_lengths.iter().sum::<usize>() as f32 / bucket_lengths.len() as f32;
-            let unique_hash_values = lsh.hash_tables.get_unique_hash_values();
-            OptRes {
+            let unique_hash_values = lsh.hash_tables.get_unique_hash_int();
+            OptResL2 {
                 r,
                 k,
                 l,

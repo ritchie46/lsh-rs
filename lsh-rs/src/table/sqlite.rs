@@ -103,7 +103,7 @@ fn get_table_names(n_hash_tables: usize) -> Vec<String> {
     table_names
 }
 
-fn get_unique_hash_values(
+fn get_unique_hash_int(
     n_hash_tables: usize,
     conn: &Connection,
 ) -> DbResult<FnvHashSet<HashPrimitive>> {
@@ -170,10 +170,6 @@ impl SqlTable {
         self.conn.execute_batch("BEGIN TRANSACTION;")?;
         Ok(())
     }
-
-    pub fn get_unique_hash_values(&self) -> FnvHashSet<HashPrimitive> {
-        get_unique_hash_values(self.n_hash_tables, &self.conn).unwrap()
-    }
 }
 
 impl HashTables for SqlTable {
@@ -227,7 +223,7 @@ impl HashTables for SqlTable {
 
         match res {
             Ok(bucket) => Ok(bucket),
-            Err(_) => Err(HashTableError::Failed),
+            Err(e) => Err(HashTableError::Failed(format!("{:?}", e))),
         }
     }
 
@@ -265,7 +261,7 @@ ORDER BY name;",
             }
         }
         println!("Unique hash values:");
-        let hv = get_unique_hash_values(self.n_hash_tables, &self.conn).unwrap();
+        let hv = get_unique_hash_int(self.n_hash_tables, &self.conn).unwrap();
         println!("{:?}", hv)
     }
 
@@ -300,6 +296,10 @@ ORDER BY name;",
         })?;
         let hashers: Vec<H> = bincode::deserialize(&buf)?;
         Ok(hashers)
+    }
+
+    fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive> {
+        get_unique_hash_int(self.n_hash_tables, &self.conn).unwrap()
     }
 }
 

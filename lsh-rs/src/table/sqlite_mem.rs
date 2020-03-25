@@ -1,7 +1,8 @@
 use super::sqlite::SqlTable;
-use crate::hash::Hash;
+use crate::hash::{Hash, HashPrimitive};
 use crate::table::general::{Bucket, HashTableError};
 use crate::{DataPoint, DataPointSlice, HashTables};
+use fnv::FnvHashSet;
 use std::ops::{Deref, DerefMut};
 
 pub struct SqlTableMem {
@@ -51,10 +52,6 @@ impl HashTables for SqlTableMem {
         self.sql_table.delete(hash, d, hash_table)
     }
 
-    fn describe(&self) {
-        self.sql_table.describe()
-    }
-
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
         self.sql_table.query_bucket(hash, hash_table)
@@ -62,5 +59,13 @@ impl HashTables for SqlTableMem {
 
     fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError> {
         self.sql_table.idx_to_datapoint(idx)
+    }
+
+    fn describe(&self) {
+        self.sql_table.describe()
+    }
+
+    fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive> {
+        self.sql_table.get_unique_hash_int()
     }
 }

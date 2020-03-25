@@ -1,6 +1,6 @@
-use crate::hash::Hash;
+use crate::hash::{Hash, HashPrimitive};
 use crate::{DataPoint, DataPointSlice, VecHash};
-use fnv::FnvHashSet as HashSet;
+use fnv::{FnvHashSet as HashSet, FnvHashSet};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
@@ -11,7 +11,7 @@ pub type Bucket = HashSet<u32>;
 #[derive(Debug, Error)]
 pub enum HashTableError {
     #[error("Something went wrong")]
-    Failed,
+    Failed(String),
     #[error("Vector not found")]
     NotFound,
     #[error("Table does not exist")]
@@ -65,4 +65,6 @@ pub trait HashTables {
         // just chose an error to make a default trait implementation
         Err(anyhow::Error::new(HashTableError::NotImplemented))
     }
+
+    fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive>;
 }

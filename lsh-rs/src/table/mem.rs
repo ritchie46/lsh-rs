@@ -1,9 +1,8 @@
 use super::general::{Bucket, HashTableError, HashTables};
-use crate::hash::Hash;
+use crate::hash::{Hash, HashPrimitive};
 use crate::utils::{all_eq, increase_capacity};
 use crate::{DataPoint, DataPointSlice};
-use fnv::FnvHashMap as HashMap;
-use fnv::FnvHashSet as HashSet;
+use fnv::{FnvHashMap as HashMap, FnvHashSet};
 use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
 
@@ -43,10 +42,6 @@ pub struct MemoryTable {
     counter: u32,
 }
 
-// impl MemoryTable {
-//
-// }
-
 impl HashTables for MemoryTable {
     fn new(n_hash_tables: usize, only_index_storage: bool, _: &str) -> Self {
         // TODO: Check the average number of vectors in the buckets.
@@ -73,7 +68,7 @@ impl HashTables for MemoryTable {
 
         // Store hash and id/idx
         let idx = self.counter;
-        let bucket = tbl.entry(hash).or_insert_with(|| HashSet::default());
+        let bucket = tbl.entry(hash).or_insert_with(|| FnvHashSet::default());
         bucket.insert(idx);
 
         // There are N hash_tables per unique vector. So we only store
@@ -136,11 +131,11 @@ impl HashTables for MemoryTable {
         let mut lengths = vec![];
         let mut max_len = 0;
         let mut min_len = 1000000;
-        let mut set: HashSet<i32> = HashSet::default();
+        let mut set: FnvHashSet<i32> = FnvHashSet::default();
         for map in self.hash_tables.iter() {
             for (k, v) in map.iter() {
                 let len = v.len();
-                let hash_values: HashSet<i32> = HashSet::from_iter(k.iter().copied());
+                let hash_values: FnvHashSet<i32> = FnvHashSet::from_iter(k.iter().copied());
                 set = set.union(&hash_values).copied().collect();
                 lengths.push(len);
                 if len > max_len {
@@ -159,6 +154,19 @@ impl HashTables for MemoryTable {
             lengths.iter().sum::<usize>() as f32 / lengths.len() as f32,
             set
         )
+    }
+
+    fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive> {
+        let mut hash_numbers = FnvHashSet::default();
+
+        for ht in &self.hash_tables {
+            for ((hash, _), _i) in ht.iter().zip(0..100) {
+                for &v in hash {
+                    hash_numbers.insert(v);
+                }
+            }
+        }
+        hash_numbers
     }
 }
 
