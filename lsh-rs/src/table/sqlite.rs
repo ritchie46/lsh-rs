@@ -3,10 +3,11 @@ use crate::hash::{Hash, HashPrimitive};
 use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, Error as DbError, Result as DbResult};
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cell::Cell;
+use std::io::Write;
 use std::mem;
-use serde::de::DeserializeOwned;
 
 fn hash_to_blob(hash: &[i32]) -> &[u8] {
     let data = hash.as_ptr() as *const u8;
@@ -91,10 +92,14 @@ pub struct SqlTable {
     committed: Cell<bool>,
 }
 
+fn fmt_table_name(hash_table: usize) -> String {
+    format!("hash_table_{}", hash_table)
+}
+
 fn get_table_names(n_hash_tables: usize) -> Vec<String> {
     let mut table_names = Vec::with_capacity(n_hash_tables);
     for idx in 0..n_hash_tables {
-        let table_name = format!("hash_table_{}", idx);
+        let table_name = fmt_table_name(idx);
         table_names.push(table_name);
     }
     table_names
@@ -108,7 +113,7 @@ fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
 }
 
 impl SqlTable {
-    fn get_table_name(&self, hash_table: usize) -> Result<&str, HashTableError> {
+    fn get_table_name_put(&self, hash_table: usize) -> Result<&str, HashTableError> {
         let opt = self.table_names.get(hash_table);
         match opt {
             Some(tbl_name) => Ok(&tbl_name[..]),
@@ -172,7 +177,7 @@ impl HashTables for SqlTable {
         let idx = self.counter;
 
         // Get the table name to store this id
-        let table_name = self.get_table_name(hash_table)?;
+        let table_name = self.get_table_name_put(hash_table)?;
         let r = insert_table(&table_name, &hash, idx, &self.conn);
 
         // Once we've traversed the last table we increment the id counter.
@@ -199,9 +204,9 @@ impl HashTables for SqlTable {
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
         self.commit();
-        let table_name = self.get_table_name(hash_table)?;
+        let table_name = fmt_table_name(hash_table);
         let blob = hash_to_blob(hash);
-        let res = query_bucket(blob, table_name, &self.conn);
+        let res = query_bucket(blob, &table_name, &self.conn);
 
         match res {
             Ok(bucket) => Ok(bucket),
@@ -236,9 +241,7 @@ impl HashTables for SqlTable {
         Ok(())
     }
 
-    fn load_hashers<H: VecHash + DeserializeOwned>(
-        &self,
-    ) -> Result<(Vec<H>), Box<dyn std::error::Error>> {
+    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> anyhow::Result<(Vec<H>)> {
         let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
         let buf: Vec<u8> = stmt.query_row(params![], |row| {
             let v: Vec<u8> = row.get_unwrap(0);
@@ -246,6 +249,37 @@ impl HashTables for SqlTable {
         })?;
         let hashers: Vec<H> = bincode::deserialize(&buf)?;
         Ok(hashers)
+    }
+
+    fn describe(&self) {
+        let mut stmt = match self.conn.prepare(
+            "SELECT name FROM sqlite_master
+WHERE type='table'
+ORDER BY name;",
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("Sqlite error: {:?}", e);
+                return;
+            }
+        };
+        let mut rows = match stmt.query(params![]) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("Sqlite error: {:?}", e);
+                return;
+            }
+        };
+        println!("Tables in sqlite backend:");
+        while let Ok(r) = rows.next() {
+            match r {
+                Some(r) => {
+                    let v: String = r.get_unwrap(0);
+                    println!("\t{:?}", v);
+                }
+                None => break,
+            }
+        }
     }
 }
 

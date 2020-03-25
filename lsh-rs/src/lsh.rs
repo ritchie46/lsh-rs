@@ -45,13 +45,13 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
     hashers: Vec<H>,
 ) -> LSH<T, H> {
     // Load hashers if store hashers fails. (i.e. exists)
-    match lsh.hash_tables.store_hashers(&hashers) {
-        Ok(_) => {}
+    let hashers = match lsh.hash_tables.store_hashers(&hashers) {
+        Ok(_) => hashers,
         Err(_) => match lsh.hash_tables.load_hashers() {
             Err(e) => panic!(format!("could not load hashers: {}", e)),
-            Ok(hashers) => lsh.hashers = hashers,
+            Ok(hashers) => hashers,
         },
-    }
+    };
     LSH {
         n_hash_tables: lsh.n_hash_tables,
         n_projections: lsh.n_projections,
@@ -300,7 +300,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             Ok(bucket) => {
                 *bucket_union = bucket_union.union(&bucket).copied().collect();
             }
-            _ => panic!("Unexpected query result"),
+            e => panic!(format!("Unexpected query result: {:?}", e)),
         };
     }
 
@@ -446,9 +446,15 @@ mod test {
 
     #[test]
     fn test_db() {
-        let mut lsh: LSH<SqlTable, _> = LSH::new(5, 2, 3).seed(2).srp();
         let v1 = &[2., 3., 4.];
+        let mut lsh: LSH<SqlTable, _> = LSH::new(5, 2, 3).seed(2).srp();
         lsh.store_vec(v1);
         assert!(lsh.query_bucket_ids(v1).contains(&0));
+        lsh.commit();
+        lsh.describe();
+
+        let mut lsh2: LSH<SqlTable, _> = LSH::new(1, 1, 1).srp();
+        lsh2.describe();
+        lsh2.query_bucket_ids(v1);
     }
 }

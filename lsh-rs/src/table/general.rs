@@ -3,15 +3,20 @@ use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet as HashSet;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use thiserror::Error;
 
 /// Bucket contains indexes to VecStore
 pub type Bucket = HashSet<u32>;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum HashTableError {
+    #[error("Something went wrong")]
     Failed,
+    #[error("Vector not found")]
     NotFound,
+    #[error("Table does not exist")]
     TableNotExist,
+    #[error("Not implemented")]
     NotImplemented,
 }
 
@@ -56,9 +61,8 @@ pub trait HashTables {
     }
 
     // If store_hashers fails, load_hasher can be executed
-    fn load_hashers<H: VecHash + DeserializeOwned>(
-        &self,
-    ) -> Result<(Vec<H>), Box<dyn std::error::Error>> {
-        Err(Box::new(std::fmt::Error))
+    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> anyhow::Result<(Vec<H>)> {
+        // just chose an error to make a default trait implementation
+        Err(anyhow::Error::new(HashTableError::NotImplemented))
     }
 }
