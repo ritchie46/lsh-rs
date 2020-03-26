@@ -30,7 +30,7 @@ pub struct LSH<T: HashTables, H: VecHash> {
     /// Dimensions of p and q
     dim: usize,
     /// Storage data structure
-    pub hash_tables: T,
+    pub hash_tables: Option<T>,
     /// seed for hash functions. If 0, randomness is seeded from the os.
     _seed: u64,
     /// store only indexes and no data points.
@@ -48,10 +48,12 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
     lsh: &mut LSH<T, H>,
     hashers: Vec<H>,
 ) -> Result<LSH<T, H>> {
+    let mut ht = *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_dir)?;
+
     // Load hashers if store hashers fails. (i.e. exists)
-    let hashers = match lsh.hash_tables.store_hashers(&hashers) {
+    let hashers = match ht.store_hashers(&hashers) {
         Ok(_) => hashers,
-        Err(_) => match lsh.hash_tables.load_hashers() {
+        Err(_) => match ht.load_hashers() {
             Err(e) => panic!(format!("could not load hashers: {}", e)),
             Ok(hashers) => hashers,
         },
@@ -61,7 +63,7 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
         n_projections: lsh.n_projections,
         hashers,
         dim: lsh.dim,
-        hash_tables: *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_dir)?,
+        hash_tables: Some(ht),
         _seed: lsh._seed,
         only_index_storage: lsh.only_index_storage,
         _multi_probe: lsh._multi_probe,
@@ -146,13 +148,13 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
     /// * `dim` - Dimensions of the data points.
 
-    pub fn new(n_projections: usize, n_hash_tables: usize, dim: usize) -> Result<Self> {
+    pub fn new(n_projections: usize, n_hash_tables: usize, dim: usize) -> Self {
         let lsh = LSH {
             n_hash_tables,
             n_projections,
             hashers: Vec::with_capacity(0),
             dim,
-            hash_tables: *T::new(n_hash_tables, true, ".")?,
+            hash_tables: None,
             _seed: 0,
             only_index_storage: false,
             _multi_probe: false,
@@ -160,7 +162,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             _multi_probe_n_probes: 16,
             _db_dir: ".".to_string(),
         };
-        Ok(lsh)
+        lsh
     }
 }
 
@@ -192,13 +194,17 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         self
     }
 
-    pub fn increase_storage(&mut self, upper_bound: usize) -> &mut Self {
-        self.hash_tables.increase_storage(upper_bound);
-        self
+    pub fn increase_storage(&mut self, upper_bound: usize) -> Result<&mut Self> {
+        self.hash_tables
+            .as_mut()
+            .unwrap()
+            .increase_storage(upper_bound);
+        Ok(self)
     }
 
-    pub fn describe(&self) {
-        self.hash_tables.describe();
+    pub fn describe(&self) -> Result<()> {
+        self.hash_tables.as_ref().unwrap().describe();
+        Ok(())
     }
 
     /// Store a single vector in storage. Returns id.
@@ -213,17 +219,17 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// let v = &[2., 3., 4.];
     /// let id = lsh.store_vec(v);
     /// ```
-    pub fn store_vec(&mut self, v: &DataPointSlice) -> u32 {
+    pub fn store_vec(&mut self, v: &DataPointSlice) -> Result<u32> {
         let mut idx = 0;
         for (i, proj) in self.hashers.iter().enumerate() {
             let mut hash = proj.hash_vec_put(v);
             hash.shrink_to_fit();
-            idx = match self.hash_tables.put(hash, v, i) {
-                Ok(i) => i,
-                Err(_) => panic!("Could not store vec"),
-            }
+
+            let mut ht = self.hash_tables.take().unwrap();
+            idx = ht.put(hash, v, i)?;
+            self.hash_tables.replace(ht);
         }
-        idx
+        Ok(idx)
     }
 
     /// Store multiple vectors in storage. Before storing the storage capacity is possibly
@@ -240,12 +246,15 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///           vec![-1., -1., 1.]];
     /// let ids = lsh.store_vecs(vs);
     /// ```
-    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Vec<u32> {
-        self.hash_tables.increase_storage(vs.len());
+    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
+        self.hash_tables
+            .as_mut()
+            .unwrap()
+            .increase_storage(vs.len());
         vs.iter().map(|x| self.store_vec(x)).collect()
     }
 
-    fn query_bucket_union(&self, v: &DataPointSlice) -> HashSet<u32> {
+    fn query_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
         if self._multi_probe {
             return self.multi_probe_bucket_union(v);
         }
@@ -254,9 +263,9 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
 
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
-            self.process_bucket_union_result(&hash, i, &mut bucket_union)
+            self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
         }
-        bucket_union
+        Ok(bucket_union)
     }
 
     /// Query all buckets in the hash tables. The union of the matching buckets over the `L`
@@ -264,15 +273,17 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket(&self, v: &DataPointSlice) -> Vec<&DataPoint> {
+    pub fn query_bucket(&self, v: &DataPointSlice) -> Result<Vec<&DataPoint>> {
         if self.only_index_storage {
-            panic!("cannot query bucket, use query_bucket_ids")
+            return Err(Error::Failed(
+                "cannot query bucket, use query_bucket_ids".to_string(),
+            ));
         }
-        let bucket_union = self.query_bucket_union(v);
+        let bucket_union = self.query_bucket_union(v)?;
 
         bucket_union
             .iter()
-            .map(|&idx| self.hash_tables.idx_to_datapoint(idx).unwrap())
+            .map(|&idx| Ok(self.hash_tables.as_ref().unwrap().idx_to_datapoint(idx)?))
             .collect()
     }
 
@@ -281,20 +292,23 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Vec<u32> {
-        let bucket_union = self.query_bucket_union(v);
-        bucket_union.iter().copied().collect()
+    pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Result<Vec<u32>> {
+        let bucket_union = self.query_bucket_union(v)?;
+        Ok(bucket_union.iter().copied().collect())
     }
 
     /// Delete data point from storage. This does not free memory as the storage vector isn't resized.
     ///
     /// # Arguments
     /// * `v` - Data point
-    pub fn delete_vec(&mut self, v: &DataPointSlice) {
+    pub fn delete_vec(&mut self, v: &DataPointSlice) -> Result<()> {
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
-            self.hash_tables.delete(hash, v, i).unwrap_or_default();
+            let mut ht = self.hash_tables.take().unwrap();
+            ht.delete(hash, v, i).unwrap_or_default();
+            self.hash_tables = Some(ht)
         }
+        Ok(())
     }
 
     fn process_bucket_union_result(
@@ -302,17 +316,23 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         hash: &Hash,
         hash_table_idx: usize,
         bucket_union: &mut HashSet<u32>,
-    ) {
-        match self.hash_tables.query_bucket(hash, hash_table_idx) {
-            Err(Error::NotFound) => (),
+    ) -> Result<()> {
+        match self
+            .hash_tables
+            .as_ref()
+            .unwrap()
+            .query_bucket(hash, hash_table_idx)
+        {
+            Err(Error::NotFound) => Ok(()),
             Ok(bucket) => {
                 *bucket_union = bucket_union.union(&bucket).copied().collect();
+                Ok(())
             }
-            e => panic!(format!("Unexpected query result: {:?}", e)),
-        };
+            Err(e) => Err(e),
+        }
     }
 
-    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> HashSet<u32> {
+    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
         let mut probing_seq = HashSet::with_capacity_and_hasher(
             self._multi_probe_n_probes,
             fnv::FnvBuildHasher::default(),
@@ -339,13 +359,15 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
                 self.process_bucket_union_result(&hash, i, &mut bucket_union);
             }
         }
-        bucket_union
+        Ok(bucket_union)
     }
 }
 
 impl<T: VecHash + Serialize> LSH<SqlTable, T> {
     pub fn commit(&mut self) -> Result<()> {
-        self.hash_tables.commit()
+        let ht = self.hash_tables.as_mut().unwrap();
+        ht.commit()?;
+        Ok(())
     }
 }
 
@@ -406,42 +428,37 @@ mod test {
 
     #[test]
     fn test_hash_table() {
-        let mut lsh = LshMem::new(5, 10, 3).unwrap().seed(1).srp().unwrap();
+        let mut lsh = LshMem::new(5, 10, 3).seed(1).srp().unwrap();
         let v1 = &[2., 3., 4.];
         let v2 = &[-1., -1., 1.];
         lsh.store_vec(v1);
         lsh.store_vec(v2);
-        assert!(lsh.query_bucket(v2).len() > 0);
+        assert!(lsh.query_bucket(v2).unwrap().len() > 0);
 
-        let bucket_len_before = lsh.query_bucket(v1).len();
+        let bucket_len_before = lsh.query_bucket(v1).unwrap().len();
         lsh.delete_vec(v1);
-        let bucket_len_before_after = lsh.query_bucket(v1).len();
+        let bucket_len_before_after = lsh.query_bucket(v1).unwrap().len();
         assert!(bucket_len_before > bucket_len_before_after);
     }
 
     #[test]
     fn test_index_only() {
         // Test if vec storage is increased
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).unwrap().seed(1).l2(2.).unwrap();
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
-        assert_eq!(lsh.hash_tables.vec_store.map.len(), 1);
+        assert_eq!(lsh.hash_tables.unwrap().vec_store.map.len(), 1);
 
         // Test if vec storage is empty
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3)
-            .unwrap()
-            .seed(1)
-            .only_index()
-            .l2(2.)
-            .unwrap();
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).only_index().l2(2.).unwrap();
         lsh.store_vec(v1);
-        assert_eq!(lsh.hash_tables.vec_store.map.len(), 0);
+        assert_eq!(lsh.hash_tables.as_ref().unwrap().vec_store.map.len(), 0);
         lsh.query_bucket_ids(v1);
     }
 
     #[test]
     fn test_serialization() {
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).unwrap().seed(1).l2(2.).unwrap();
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
         let mut tmp = std::env::temp_dir();
@@ -460,24 +477,24 @@ mod test {
     #[test]
     fn test_db() {
         let v1 = &[2., 3., 4.];
-        let mut lsh = LshSql::new(5, 2, 3).unwrap().seed(2).srp().unwrap();
+        let mut lsh = LshSql::new(5, 2, 3).seed(2).srp().unwrap();
         lsh.store_vec(v1);
-        assert!(lsh.query_bucket_ids(v1).contains(&0));
+        assert!(lsh.query_bucket_ids(v1).unwrap().contains(&0));
         lsh.commit();
         lsh.describe();
 
         // tests if the same db is reused.
-        let mut lsh2 = LshSql::new(1, 1, 1).unwrap().srp().unwrap();
+        let lsh2 = LshSql::new(1, 1, 1).srp().unwrap();
         lsh2.describe();
-        assert!(lsh2.query_bucket_ids(v1).contains(&0));
+        assert!(lsh2.query_bucket_ids(v1).unwrap().contains(&0));
     }
 
     #[test]
     fn test_mem_db() {
         let v1 = &[2., 3., 4.];
-        let mut lsh = LshSqlMem::new(5, 2, 3).unwrap().seed(2).srp().unwrap();
+        let mut lsh = LshSqlMem::new(5, 2, 3).seed(2).srp().unwrap();
         lsh.store_vec(v1);
-        assert!(lsh.query_bucket_ids(v1).contains(&0));
+        assert!(lsh.query_bucket_ids(v1).unwrap().contains(&0));
         lsh.describe();
     }
 }

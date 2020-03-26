@@ -50,7 +50,7 @@ pub struct OptResL2 {
     pub unique_hash_values: FnvHashSet<HashPrimitive>,
 }
 
-pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<Result<OptResL2>> {
+pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Result<Vec<OptResL2>> {
     let mut params = vec![];
     let r = 4.0;
     let p1 = l2_ph(r as f64, 1.);
@@ -58,17 +58,17 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<Resul
         let l = estimate_l(delta, p1, k as usize);
         params.push((r, k, l))
     }
-    let result: Vec<Result<OptResL2>> = params
+    let result = params
         .par_iter()
         .map(|&(r, k, l)| {
-            let mut lsh = LshMem::new(k, l, dim)?.l2(r as f32)?;
+            let mut lsh = LshMem::new(k, l, dim).l2(r as f32)?;
             lsh.store_vecs(vs);
             let mut search_time = 0.;
             let mut hash_time = 0.;
             let mut bucket_lengths = Vec::with_capacity(vs.len());
             for v in vs {
                 let th = Instant::now();
-                let mut bucket_ids = lsh.query_bucket_ids(v);
+                let mut bucket_ids = lsh.query_bucket_ids(v)?;
                 hash_time += th.elapsed().as_secs_f64();
 
                 bucket_lengths.push(bucket_ids.len());
@@ -87,7 +87,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<Resul
             let min = *bucket_lengths.iter().min().unwrap_or(&(0 as usize));
             let max = *bucket_lengths.iter().max().unwrap_or(&(0 as usize));
             let avg = bucket_lengths.iter().sum::<usize>() as f32 / bucket_lengths.len() as f32;
-            let unique_hash_values = lsh.hash_tables.get_unique_hash_int();
+            let unique_hash_values = lsh.hash_tables.unwrap().get_unique_hash_int();
             Ok(OptResL2 {
                 r,
                 k,

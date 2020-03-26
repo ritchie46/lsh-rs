@@ -45,9 +45,9 @@ pub fn query_image(
         .map(|&x| x as f32)
         .collect();
     let q = scale_vec(&v);
-    let mut lsh: LSH<SqlTable, _> = LSH::new(1, 1, 1).l2(1.);
+    let mut lsh: LSH<SqlTable, _> = LSH::new(1, 1, 1).l2(1.)?;
     let row_ids: Vec<i64> = lsh
-        .query_bucket_ids(&q)
+        .query_bucket_ids(&q)?
         .iter()
         .map(|&x| (x + 1) as i64)
         .take(constants::QUERY_L_FACT_UPPER_BOUND * constants::L)

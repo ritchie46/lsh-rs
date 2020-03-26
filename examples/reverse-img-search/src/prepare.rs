@@ -71,7 +71,7 @@ pub fn sample_params(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let vs = select_and_scale_vecs(0, n, conn).expect("could not get vecs");
     let dim = vs[0].len();
-    let mut results = optimize_l2_params(delta, dim, &vs);
+    let mut results = optimize_l2_params(delta, dim, &vs)?;
 
     // now only ran on a sample n of N.
     // search_time is expected to increase by N/n (due to duplicates)
@@ -125,16 +125,16 @@ pub fn make_lsh(
     let mut lsh: LSH<SqlTable, _> = LSH::new(n_projections, n_hash_tables, dim)
         .seed(seed)
         .only_index()
-        .l2(r);
+        .l2(r)?;
 
     let mut prev_i = 0;
     for i in (chunk_size..n_total).step_by(chunk_size) {
         println!("{} until {}", prev_i, i);
         let vs = select_and_scale_vecs(prev_i, i, conn).expect("could not get vecs from db");
         prev_i = i;
-        lsh.store_vecs(&vs);
+        lsh.store_vecs(&vs)?;
     }
     println!("indexing...");
-    lsh.commit();
+    lsh.commit()?;
     Ok(())
 }
