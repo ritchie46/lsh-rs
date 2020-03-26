@@ -1,5 +1,6 @@
 use super::general::{Bucket, HashTableError, HashTables};
 use crate::hash::{Hash, HashPrimitive};
+use crate::table::general::HashTableResult;
 use crate::{DataPoint, DataPointSlice, VecHash};
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, Error as DbError, Result as DbResult, NO_PARAMS};
@@ -55,7 +56,7 @@ fn table_exists(table_name: &str, connection: &Connection) -> DbResult<bool> {
 sqlite_master WHERE type='table' AND name='{}';",
         table_name
     ))?;
-    let mut rows = stmt.query(params![])?;
+    let mut rows = stmt.query(NO_PARAMS)?;
 
     let row = rows.next()?;
     match row {
@@ -243,7 +244,7 @@ ORDER BY name;",
                 return;
             }
         };
-        let mut rows = match stmt.query(params![]) {
+        let mut rows = match stmt.query(NO_PARAMS) {
             Ok(r) => r,
             Err(e) => {
                 println!("Sqlite error: {:?}", e);
@@ -265,10 +266,7 @@ ORDER BY name;",
         println!("{:?}", hv)
     }
 
-    fn store_hashers<H: VecHash + Serialize>(
-        &mut self,
-        hashers: &[H],
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn store_hashers<H: VecHash + Serialize>(&mut self, hashers: &[H]) -> HashTableResult<()> {
         let buf: Vec<u8> = bincode::serialize(hashers)?;
 
         // fails if already exists
@@ -288,9 +286,9 @@ ORDER BY name;",
         Ok(())
     }
 
-    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> anyhow::Result<(Vec<H>)> {
+    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> HashTableResult<Vec<H>> {
         let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
-        let buf: Vec<u8> = stmt.query_row(params![], |row| {
+        let buf: Vec<u8> = stmt.query_row(NO_PARAMS, |row| {
             let v: Vec<u8> = row.get_unwrap(0);
             Ok(v)
         })?;
@@ -315,7 +313,7 @@ mod test {
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
             .expect("query failed");
-        let r = stmt.query(params![]).expect("query failed");
+        let r = stmt.query(NO_PARAMS).expect("query failed");
     }
 
     #[test]
