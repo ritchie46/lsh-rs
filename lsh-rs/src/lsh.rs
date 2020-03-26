@@ -164,6 +164,15 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         };
         lsh
     }
+
+    fn validate_vec(&self, v: &DataPointSlice) -> Result<()> {
+        if !(v.len() == self.dim) {
+            return Err(Error::Failed(
+                "data point is not valid, are the dimensions correct?".to_string(),
+            ));
+        };
+        Ok(())
+    }
 }
 
 impl<H: VecHash, T: HashTables> LSH<T, H> {
@@ -220,6 +229,8 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// let id = lsh.store_vec(v);
     /// ```
     pub fn store_vec(&mut self, v: &DataPointSlice) -> Result<u32> {
+        self.validate_vec(v)?;
+
         let mut idx = 0;
         for (i, proj) in self.hashers.iter().enumerate() {
             let mut hash = proj.hash_vec_put(v);
@@ -247,6 +258,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// let ids = lsh.store_vecs(vs);
     /// ```
     pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
+        self.validate_vec(&vs[0])?;
         self.hash_tables
             .as_mut()
             .unwrap()
@@ -255,6 +267,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     }
 
     fn query_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
+        self.validate_vec(v)?;
         if self._multi_probe {
             return self.multi_probe_bucket_union(v);
         }
@@ -274,6 +287,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// # Arguments
     /// * `v` - Query vector
     pub fn query_bucket(&self, v: &DataPointSlice) -> Result<Vec<&DataPoint>> {
+        self.validate_vec(v)?;
         if self.only_index_storage {
             return Err(Error::Failed(
                 "cannot query bucket, use query_bucket_ids".to_string(),
@@ -293,6 +307,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// # Arguments
     /// * `v` - Query vector
     pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Result<Vec<u32>> {
+        self.validate_vec(v)?;
         let bucket_union = self.query_bucket_union(v)?;
         Ok(bucket_union.iter().copied().collect())
     }
@@ -302,6 +317,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// # Arguments
     /// * `v` - Data point
     pub fn delete_vec(&mut self, v: &DataPointSlice) -> Result<()> {
+        self.validate_vec(v)?;
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
             let mut ht = self.hash_tables.take().unwrap();
@@ -333,6 +349,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     }
 
     fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
+        self.validate_vec(v)?;
         let mut probing_seq = HashSet::with_capacity_and_hasher(
             self._multi_probe_n_probes,
             fnv::FnvBuildHasher::default(),
