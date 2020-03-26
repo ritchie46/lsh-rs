@@ -1,8 +1,8 @@
 #![cfg(feature = "stats")]
-use crate::hash::HashPrimitive;
-use crate::utils::l2_norm;
-use crate::{DataPoint, LshMem};
-use crate::{HashTables, LshSqlMem, MemoryTable};
+use crate::{
+    hash::HashPrimitive, utils::l2_norm, DataPoint, HashTables, LshMem, LshSqlMem, MemoryTable,
+    Result,
+};
 use fnv::FnvHashSet;
 use ndarray::aview1;
 use rayon::prelude::*;
@@ -50,7 +50,7 @@ pub struct OptResL2 {
     pub unique_hash_values: FnvHashSet<HashPrimitive>,
 }
 
-pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptResL2> {
+pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<Result<OptResL2>> {
     let mut params = vec![];
     let r = 4.0;
     let p1 = l2_ph(r as f64, 1.);
@@ -58,10 +58,10 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
         let l = estimate_l(delta, p1, k as usize);
         params.push((r, k, l))
     }
-    let result: Vec<OptResL2> = params
+    let result: Vec<Result<OptResL2>> = params
         .par_iter()
         .map(|&(r, k, l)| {
-            let mut lsh = LshMem::new(k, l, dim).l2(r as f32);
+            let mut lsh = LshMem::new(k, l, dim)?.l2(r as f32)?;
             lsh.store_vecs(vs);
             let mut search_time = 0.;
             let mut hash_time = 0.;
@@ -88,7 +88,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
             let max = *bucket_lengths.iter().max().unwrap_or(&(0 as usize));
             let avg = bucket_lengths.iter().sum::<usize>() as f32 / bucket_lengths.len() as f32;
             let unique_hash_values = lsh.hash_tables.get_unique_hash_int();
-            OptResL2 {
+            Ok(OptResL2 {
                 r,
                 k,
                 l,
@@ -98,7 +98,7 @@ pub fn optimize_l2_params(delta: f64, dim: usize, vs: &[DataPoint]) -> Vec<OptRe
                 max_len: max,
                 avg_len: avg,
                 unique_hash_values,
-            }
+            })
         })
         .collect();
     result

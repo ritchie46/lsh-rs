@@ -295,7 +295,7 @@ mod test {
 
     #[test]
     fn test_sql_table_init() {
-        let sql = SqlTableMem::new(1, true, ".");
+        let sql = SqlTableMem::new(1, true, ".").unwrap();
         let mut stmt = sql
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
@@ -305,7 +305,7 @@ mod test {
 
     #[test]
     fn test_sql_crud() {
-        let mut sql = SqlTableMem::new(1, true, ".");
+        let mut sql = *SqlTableMem::new(1, true, ".").unwrap();
         let v = vec![1., 2.];
         for hash in &[vec![1, 2], vec![2, 3]] {
             sql.put(hash.clone(), &v, 0);

@@ -406,7 +406,7 @@ mod test {
 
     #[test]
     fn test_hash_table() {
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 10, 3).seed(1).srp();
+        let mut lsh = LshMem::new(5, 10, 3).unwrap().seed(1).srp().unwrap();
         let v1 = &[2., 3., 4.];
         let v2 = &[-1., -1., 1.];
         lsh.store_vec(v1);
@@ -422,13 +422,18 @@ mod test {
     #[test]
     fn test_index_only() {
         // Test if vec storage is increased
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.);
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).unwrap().seed(1).l2(2.).unwrap();
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
         assert_eq!(lsh.hash_tables.vec_store.map.len(), 1);
 
         // Test if vec storage is empty
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).only_index().l2(2.);
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3)
+            .unwrap()
+            .seed(1)
+            .only_index()
+            .l2(2.)
+            .unwrap();
         lsh.store_vec(v1);
         assert_eq!(lsh.hash_tables.vec_store.map.len(), 0);
         lsh.query_bucket_ids(v1);
@@ -436,7 +441,7 @@ mod test {
 
     #[test]
     fn test_serialization() {
-        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.);
+        let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).unwrap().seed(1).l2(2.).unwrap();
         let v1 = &[2., 3., 4.];
         lsh.store_vec(v1);
         let mut tmp = std::env::temp_dir();
@@ -455,14 +460,14 @@ mod test {
     #[test]
     fn test_db() {
         let v1 = &[2., 3., 4.];
-        let mut lsh = LshSql::new(5, 2, 3).seed(2).srp();
+        let mut lsh = LshSql::new(5, 2, 3).unwrap().seed(2).srp().unwrap();
         lsh.store_vec(v1);
         assert!(lsh.query_bucket_ids(v1).contains(&0));
         lsh.commit();
         lsh.describe();
 
         // tests if the same db is reused.
-        let mut lsh2 = LshSql::new(1, 1, 1).srp();
+        let mut lsh2 = LshSql::new(1, 1, 1).unwrap().srp().unwrap();
         lsh2.describe();
         assert!(lsh2.query_bucket_ids(v1).contains(&0));
     }
@@ -470,7 +475,7 @@ mod test {
     #[test]
     fn test_mem_db() {
         let v1 = &[2., 3., 4.];
-        let mut lsh = LshSqlMem::new(5, 2, 3).seed(2).srp();
+        let mut lsh = LshSqlMem::new(5, 2, 3).unwrap().seed(2).srp().unwrap();
         lsh.store_vec(v1);
         assert!(lsh.query_bucket_ids(v1).contains(&0));
         lsh.describe();
