@@ -1,11 +1,10 @@
-use crate::hash::{Hash, SignRandomProjections, VecHash, L2, MIPS};
-use crate::multi_probe::create_hash_permutation;
-use crate::table::sqlite_mem::SqlTableMem;
-use crate::table::{
-    general::{HashTableError, HashTables},
-    mem::MemoryTable,
-};
 use crate::utils::create_rng;
+use crate::{
+    hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
+    multi_probe::create_hash_permutation,
+    table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
+    Error, Result,
+};
 use crate::{DataPoint, DataPointSlice, SqlTable};
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
@@ -48,7 +47,7 @@ pub struct LSH<T: HashTables, H: VecHash> {
 fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
     lsh: &mut LSH<T, H>,
     hashers: Vec<H>,
-) -> LSH<T, H> {
+) -> Result<LSH<T, H>> {
     // Load hashers if store hashers fails. (i.e. exists)
     let hashers = match lsh.hash_tables.store_hashers(&hashers) {
         Ok(_) => hashers,
@@ -57,24 +56,25 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
             Ok(hashers) => hashers,
         },
     };
-    LSH {
+    let lsh = LSH {
         n_hash_tables: lsh.n_hash_tables,
         n_projections: lsh.n_projections,
         hashers,
         dim: lsh.dim,
-        hash_tables: T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_dir),
+        hash_tables: *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_dir)?,
         _seed: lsh._seed,
         only_index_storage: lsh.only_index_storage,
         _multi_probe: lsh._multi_probe,
         _multi_probe_n_perturbations: lsh._multi_probe_n_perturbations,
         _multi_probe_n_probes: lsh._multi_probe_n_probes,
         _db_dir: lsh._db_dir.clone(),
-    }
+    };
+    Ok(lsh)
 }
 
 impl<T: HashTables> LSH<T, SignRandomProjections> {
     /// Create a new SignRandomProjections LSH
-    pub fn srp(&mut self) -> Self {
+    pub fn srp(&mut self) -> Result<Self> {
         let mut rng = create_rng(self._seed);
         let mut hashers = Vec::with_capacity(self.n_hash_tables);
 
@@ -99,7 +99,7 @@ impl<T: HashTables> LSH<T, L2> {
     /// # Arguments
     ///
     /// * `r` - Parameter of hash function.
-    pub fn l2(&mut self, r: f32) -> Self {
+    pub fn l2(&mut self, r: f32) -> Result<Self> {
         let mut rng = create_rng(self._seed);
         let mut hashers = Vec::with_capacity(self.n_hash_tables);
         for _ in 0..self.n_hash_tables {
@@ -124,7 +124,7 @@ impl<T: HashTables> LSH<T, MIPS> {
     /// * `r` - Parameter of hash function.
     /// * `U` - Parameter of hash function.
     /// * `m` - Parameter of hash function.
-    pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Self {
+    pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Result<Self> {
         let mut rng = create_rng(self._seed);
         let mut hashers = Vec::with_capacity(self.n_hash_tables);
 
@@ -146,20 +146,21 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// * `n_hash_tables` - Increases the chance of finding the closest but has a performance and space cost.
     /// * `dim` - Dimensions of the data points.
 
-    pub fn new(n_projections: usize, n_hash_tables: usize, dim: usize) -> Self {
-        LSH {
+    pub fn new(n_projections: usize, n_hash_tables: usize, dim: usize) -> Result<Self> {
+        let lsh = LSH {
             n_hash_tables,
             n_projections,
             hashers: Vec::with_capacity(0),
             dim,
-            hash_tables: T::new(n_hash_tables, true, "."),
+            hash_tables: *T::new(n_hash_tables, true, ".")?,
             _seed: 0,
             only_index_storage: false,
             _multi_probe: false,
             _multi_probe_n_perturbations: 3,
             _multi_probe_n_probes: 16,
             _db_dir: ".".to_string(),
-        }
+        };
+        Ok(lsh)
     }
 }
 
@@ -303,7 +304,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         bucket_union: &mut HashSet<u32>,
     ) {
         match self.hash_tables.query_bucket(hash, hash_table_idx) {
-            Err(HashTableError::NotFound) => (),
+            Err(Error::NotFound) => (),
             Ok(bucket) => {
                 *bucket_union = bucket_union.union(&bucket).copied().collect();
             }
@@ -343,7 +344,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
 }
 
 impl<T: VecHash + Serialize> LSH<SqlTable, T> {
-    pub fn commit(&mut self) -> DbResult<()> {
+    pub fn commit(&mut self) -> Result<()> {
         self.hash_tables.commit()
     }
 }
@@ -364,7 +365,7 @@ impl<H> LSH<MemoryTable, H>
 where
     H: Serialize + DeserializeOwned + VecHash,
 {
-    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let mut f = File::open(path)?;
         let mut buf: Vec<u8> = vec![];
         f.read_to_end(&mut buf)?;
@@ -379,7 +380,7 @@ where
 
         Ok(())
     }
-    pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let hash_tables = bincode::serialize(&self.hash_tables)?;
         let hashers = bincode::serialize(&self.hashers)?;
 

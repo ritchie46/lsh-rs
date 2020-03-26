@@ -98,6 +98,7 @@ mod table {
     pub mod sqlite;
     pub mod sqlite_mem;
 }
+mod error;
 pub mod utils;
 pub use crate::lsh::{LshMem, LshSql, LshSqlMem, LSH};
 pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
@@ -107,3 +108,5 @@ pub mod stats;
 
 pub type DataPoint = Vec<f32>;
 pub type DataPointSlice = [f32];
+pub use error::Error;
+pub type Result<T> = std::result::Result<T, Error>;

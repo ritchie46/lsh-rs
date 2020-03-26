@@ -1,7 +1,8 @@
-use super::general::{Bucket, HashTableError, HashTables};
-use crate::hash::{Hash, HashPrimitive};
-use crate::table::general::HashTableResult;
-use crate::{DataPoint, DataPointSlice, VecHash};
+use super::general::Bucket;
+use crate::{
+    hash::{Hash, HashPrimitive},
+    DataPoint, DataPointSlice, Error, HashTables, Result, VecHash,
+};
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, Error as DbError, Result as DbResult, NO_PARAMS};
 use serde::de::DeserializeOwned;
@@ -61,7 +62,7 @@ sqlite_master WHERE type='table' AND name='{}';",
     let row = rows.next()?;
     match row {
         None => Ok(false),
-        Some(row) => Ok(true),
+        Some(_row) => Ok(true),
     }
 }
 
@@ -132,11 +133,11 @@ fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
 }
 
 impl SqlTable {
-    fn get_table_name_put(&self, hash_table: usize) -> Result<&str, HashTableError> {
+    fn get_table_name_put(&self, hash_table: usize) -> Result<&str> {
         let opt = self.table_names.get(hash_table);
         match opt {
             Some(tbl_name) => Ok(&tbl_name[..]),
-            None => Err(HashTableError::TableNotExist),
+            None => Err(Error::TableNotExist),
         }
     }
 
@@ -144,7 +145,7 @@ impl SqlTable {
         n_hash_tables: usize,
         only_index_storage: bool,
         conn: Connection,
-    ) -> SqlTable {
+    ) -> Result<SqlTable> {
         let table_names = get_table_names(n_hash_tables);
         init_table(&conn, &table_names).expect("could not make tables");
         let sql = SqlTable {
@@ -155,11 +156,11 @@ impl SqlTable {
             table_names,
             committed: Cell::new(false),
         };
-        sql.init_transaction();
-        sql
+        sql.init_transaction()?;
+        Ok(sql)
     }
 
-    pub fn commit(&self) -> DbResult<()> {
+    pub fn commit(&self) -> Result<()> {
         if !self.committed.replace(true) {
             self.conn.execute_batch("COMMIT TRANSACTION;")?;
         }
@@ -174,19 +175,14 @@ impl SqlTable {
 }
 
 impl HashTables for SqlTable {
-    fn new(n_hash_tables: usize, only_index_storage: bool, db_dir: &str) -> Self {
+    fn new(n_hash_tables: usize, only_index_storage: bool, db_dir: &str) -> Result<Box<Self>> {
         let mut path = std::path::Path::new(db_dir);
         let buf = path.with_file_name("lsh.db3");
-        let conn = Connection::open(&buf).expect("could not open sqlite");
-        SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn)
+        let conn = Connection::open(&buf)?;
+        SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn).map(|tbl| Box::new(tbl))
     }
 
-    fn put(
-        &mut self,
-        hash: Hash,
-        _d: &DataPointSlice,
-        hash_table: usize,
-    ) -> Result<u32, HashTableError> {
+    fn put(&mut self, hash: Hash, _d: &DataPointSlice, hash_table: usize) -> Result<u32> {
         // the unique id of the unique vector
         let idx = self.counter;
 
@@ -206,30 +202,21 @@ impl HashTables for SqlTable {
         }
     }
 
-    fn delete(
-        &mut self,
-        hash: Hash,
-        d: &DataPointSlice,
-        hash_table: usize,
-    ) -> Result<(), HashTableError> {
-        Ok(())
-    }
-
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
-        self.commit();
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket> {
+        self.commit()?;
         let table_name = fmt_table_name(hash_table);
         let blob = hash_to_blob(hash);
         let res = query_bucket(blob, &table_name, &self.conn);
 
         match res {
             Ok(bucket) => Ok(bucket),
-            Err(e) => Err(HashTableError::Failed(format!("{:?}", e))),
+            Err(e) => Err(Error::Failed(format!("{:?}", e))),
         }
     }
 
-    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError> {
-        Err(HashTableError::NotImplemented)
+    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint> {
+        Err(Error::NotImplemented)
     }
 
     fn describe(&self) {
@@ -266,7 +253,7 @@ ORDER BY name;",
         println!("{:?}", hv)
     }
 
-    fn store_hashers<H: VecHash + Serialize>(&mut self, hashers: &[H]) -> HashTableResult<()> {
+    fn store_hashers<H: VecHash + Serialize>(&mut self, hashers: &[H]) -> Result<()> {
         let buf: Vec<u8> = bincode::serialize(hashers)?;
 
         // fails if already exists
@@ -280,13 +267,13 @@ ORDER BY name;",
             .prepare("INSERT INTO state (hashers) VALUES (?1)")?;
 
         // unlock database by committing any running transaction.
-        self.commit();
+        self.commit()?;
         stmt.execute(params![buf])?;
-        self.init_transaction();
+        self.init_transaction()?;
         Ok(())
     }
 
-    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> HashTableResult<Vec<H>> {
+    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> Result<Vec<H>> {
         let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
         let buf: Vec<u8> = stmt.query_row(NO_PARAMS, |row| {
             let v: Vec<u8> = row.get_unwrap(0);
@@ -356,7 +343,7 @@ mod test {
         let table_names = vec!["table_0".to_string()];
         init_table(&conn, &table_names).expect("could not make tables");
         assert_eq!(Ok(true), table_exists(&table_names[0], &conn));
-        conn.close();
+        conn.close().unwrap();
         // new connection wo/ tables
         let conn = Connection::open_in_memory().expect("could not open sqlite");
         assert_eq!(Ok(false), table_exists(&table_names[0], &conn));

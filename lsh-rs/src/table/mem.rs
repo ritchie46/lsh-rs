@@ -1,7 +1,9 @@
-use super::general::{Bucket, HashTableError, HashTables};
-use crate::hash::{Hash, HashPrimitive};
-use crate::utils::{all_eq, increase_capacity};
-use crate::{DataPoint, DataPointSlice};
+use crate::{
+    hash::{Hash, HashPrimitive},
+    table::general::{Bucket, HashTables},
+    utils::{all_eq, increase_capacity},
+    DataPoint, DataPointSlice, Error, Result,
+};
 use fnv::{FnvHashMap as HashMap, FnvHashSet};
 use serde::{Deserialize, Serialize};
 use std::iter::FromIterator;
@@ -43,27 +45,23 @@ pub struct MemoryTable {
 }
 
 impl HashTables for MemoryTable {
-    fn new(n_hash_tables: usize, only_index_storage: bool, _: &str) -> Self {
+    fn new(n_hash_tables: usize, only_index_storage: bool, _: &str) -> Result<Box<Self>> {
         // TODO: Check the average number of vectors in the buckets.
         // this way the capacity can be approximated by the number of DataPoints that will
         // be stored.
         let hash_tables = vec![HashMap::default(); n_hash_tables];
         let vector_store = VecStore { map: vec![] };
-        MemoryTable {
+        let m = MemoryTable {
             hash_tables,
             n_hash_tables,
             vec_store: vector_store,
             only_index_storage,
             counter: 0,
-        }
+        };
+        Ok(Box::new(m))
     }
 
-    fn put(
-        &mut self,
-        hash: Hash,
-        d: &DataPointSlice,
-        hash_table: usize,
-    ) -> Result<u32, HashTableError> {
+    fn put(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<u32> {
         let tbl = &mut self.hash_tables[hash_table];
 
         // Store hash and id/idx
@@ -83,12 +81,7 @@ impl HashTables for MemoryTable {
     }
 
     /// Expensive operation we need to do a linear search over all datapoints
-    fn delete(
-        &mut self,
-        hash: Hash,
-        d: &DataPointSlice,
-        hash_table: usize,
-    ) -> Result<(), HashTableError> {
+    fn delete(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
         // First find the data point in the VecStore
         let idx = match self.vec_store.position(d) {
             None => return Ok(()),
@@ -101,7 +94,7 @@ impl HashTables for MemoryTable {
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.get_mut(&hash);
         match bucket {
-            None => return Err(HashTableError::NotFound),
+            None => return Err(Error::NotFound),
             Some(bucket) => {
                 bucket.remove(&idx);
                 Ok(())
@@ -110,15 +103,15 @@ impl HashTables for MemoryTable {
     }
 
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket, HashTableError> {
+    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket> {
         let tbl = &self.hash_tables[hash_table];
         match tbl.get(hash) {
-            None => Err(HashTableError::NotFound),
+            None => Err(Error::NotFound),
             Some(bucket) => Ok(bucket.clone()),
         }
     }
 
-    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint, HashTableError> {
+    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint> {
         Ok(self.vec_store.get(idx))
     }
 
