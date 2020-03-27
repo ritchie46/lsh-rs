@@ -14,7 +14,7 @@
 //! ## Getting started
 //!
 //! ```rust
-//! use lsh_rs::LSH;
+//! use lsh_rs::LshSql;
 //! // 2 rows w/ dimension 3.
 //! let p = &[vec![1., 1.5, 2.],
 //!         vec![2., 1.1, -0.3]];
@@ -23,7 +23,7 @@
 //! let n_projections = 9;
 //! let n_hash_tables = 30;
 //! let dim = 3;
-//! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).srp();
+//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).srp();
 //! lsh.store_vecs(p);
 //!
 //! // Query in sublinear time.
@@ -34,7 +34,7 @@
 //! ## Signed Random Projections
 //! LSH for maximum cosine similarity search.
 //! ```rust
-//! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).srp();
+//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).srp();
 //! ```
 //!
 //! ## L2
@@ -43,7 +43,7 @@
 //! ```
 //! // hyper parameter r in https://arxiv.org/pdf/1411.3787.pdf (eq. 8)
 //! let bucket_width = 2.2;
-//! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).l2(bucket_width);
+//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).l2(bucket_width);
 //! ```
 //!
 //! ## Maximum Inner Product (MIPS)
@@ -54,7 +54,7 @@
 //! let U = 0.83;
 //! // number of concatenations
 //! let m = 3;
-//! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).mips(r, U, m);
+//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).mips(r, U, m);
 //! ```
 //!
 //! ## Seed
@@ -62,7 +62,7 @@
 //! is taken from the system. If you want to have reproducable outcomes, you can set a manual seed.
 //!
 //! ```rust
-//! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).seed(12).srp();
+//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).seed(12).srp();
 //! ```
 //!
 //! ## Unique indexes
@@ -70,7 +70,7 @@
 //! hash table). You can choose to only store unique indexes of the data points. The index ids are
 //! assigned in chronological order. This will drastically decrease the required memory.
 //! ```rust
-//! let mut lsh = LSH::new(n_projections, n_hash_tables, dim).only_index().srp();
+//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).only_index().srp();
 //! ```
 //!
 //! ## BLAS support
@@ -90,7 +90,10 @@
 extern crate blas_src;
 extern crate ndarray;
 mod hash;
-mod lsh;
+mod lsh {
+    pub mod lsh;
+    mod test;
+}
 mod multi_probe;
 mod table {
     pub mod general;
@@ -100,8 +103,8 @@ mod table {
 }
 mod error;
 pub mod utils;
-pub use crate::lsh::{LshMem, LshSql, LshSqlMem, LSH};
-pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
+pub use crate::lsh::lsh::{LshMem, LshSql, LshSqlMem, LSH};
+pub use hash::{Hash, HashPrimitive, SignRandomProjections, VecHash, L2, MIPS};
 pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable};
 #[cfg(feature = "stats")]
 pub mod stats;
