@@ -173,9 +173,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         };
         Ok(())
     }
-}
 
-impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// Set seed of LSH
     /// # Arguments
     /// * `seed` - Seed for the RNG's if 0, RNG's are seeded randomly.
@@ -209,6 +207,11 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             .unwrap()
             .increase_storage(upper_bound);
         Ok(self)
+    }
+
+    pub fn set_database_directory(&mut self, path: &str) -> &mut Self {
+        self._db_dir = path.to_string();
+        self
     }
 
     pub fn describe(&self) -> Result<()> {

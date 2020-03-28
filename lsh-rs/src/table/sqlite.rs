@@ -132,6 +132,14 @@ fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
     Ok(())
 }
 
+fn init_db_setttings(conn: &Connection) -> DbResult<()> {
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;",
+    )?;
+    Ok(())
+}
+
 impl SqlTable {
     fn get_table_name_put(&self, hash_table: usize) -> Result<&str> {
         let opt = self.table_names.get(hash_table);
@@ -141,13 +149,14 @@ impl SqlTable {
         }
     }
 
-    fn init_from_conn(
+    pub fn init_from_conn(
         n_hash_tables: usize,
         only_index_storage: bool,
         conn: Connection,
     ) -> Result<SqlTable> {
         let table_names = get_table_names(n_hash_tables);
-        init_table(&conn, &table_names).expect("could not make tables");
+        init_db_setttings(&conn)?;
+        init_table(&conn, &table_names)?;
         let sql = SqlTable {
             n_hash_tables,
             only_index_storage,

@@ -27,7 +27,8 @@ impl DerefMut for SqlTableMem {
 
 impl HashTables for SqlTableMem {
     fn new(n_hash_tables: usize, only_index_storage: bool, db_dir: &str) -> Result<Box<Self>> {
-        let sql_table = *SqlTable::new(n_hash_tables, only_index_storage, db_dir)?;
+        let conn = rusqlite::Connection::open_in_memory()?;
+        let sql_table = SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn)?;
         Ok(Box::new(SqlTableMem { sql_table }))
     }
 
