@@ -135,7 +135,8 @@ fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
 fn init_db_setttings(conn: &Connection) -> DbResult<()> {
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
-    PRAGMA synchronous = NORMAL;",
+    PRAGMA synchronous = OFF;
+     PRAGMA main.locking_mode=EXCLUSIVE;",
     )?;
     Ok(())
 }
@@ -176,7 +177,7 @@ impl SqlTable {
         Ok(())
     }
 
-    fn init_transaction(&self) -> DbResult<()> {
+    pub fn init_transaction(&self) -> DbResult<()> {
         self.committed.set(false);
         self.conn.execute_batch("BEGIN TRANSACTION;")?;
         Ok(())

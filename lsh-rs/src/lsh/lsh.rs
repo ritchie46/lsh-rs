@@ -389,6 +389,12 @@ impl<T: VecHash + Serialize> LSH<SqlTable, T> {
         ht.commit()?;
         Ok(())
     }
+
+    pub fn init_transaction(&mut self) -> Result<()> {
+        let ht = self.hash_tables.as_mut().unwrap();
+        ht.init_transaction()?;
+        Ok(())
+    }
 }
 
 /// Intermediate data structure for serialization. Only contains the absolute

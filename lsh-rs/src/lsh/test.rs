@@ -53,11 +53,13 @@ fn test_serialization() {
 #[test]
 fn test_db() {
     let v1 = &[2., 3., 4.];
-    let mut lsh = LshSql::new(5, 2, 3).seed(2).srp().unwrap();
-    lsh.store_vec(v1);
-    assert!(lsh.query_bucket_ids(v1).unwrap().contains(&0));
-    lsh.commit();
-    lsh.describe();
+    {
+        let mut lsh = LshSql::new(5, 2, 3).seed(2).srp().unwrap();
+        lsh.store_vec(v1);
+        assert!(lsh.query_bucket_ids(v1).unwrap().contains(&0));
+        lsh.commit();
+        lsh.describe();
+    }
 
     // tests if the same db is reused.
     let lsh2 = LshSql::new(5, 2, 3).srp().unwrap();
