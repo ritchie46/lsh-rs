@@ -6,5 +6,6 @@ members = [
     "lsh-rs/bench",
     "lsh-py",
     "examples/reverse-img-search",
-    "examples/reverse-img-search/bench"
+    "examples/reverse-img-search/bench",
+    "lsh-rs/floky-bin"
 ]
