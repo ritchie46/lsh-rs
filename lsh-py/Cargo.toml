@@ -1,5 +1,5 @@
 [package]
-name = "lsh-py"
+name = "floky"
 version = "0.1.0"
 authors = ["ritchie46 <ritchie46@gmail.com>"]
 edition = "2018"
@@ -13,5 +13,5 @@ blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]
 thiserror = "1.0.13"
 
 [lib]
-name = "lshpy"
+name = "floky"
 crate-type = ["cdylib"]

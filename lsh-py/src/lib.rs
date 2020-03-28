@@ -25,7 +25,7 @@ impl std::convert::From<PyLshErr> for PyErr {
 }
 
 #[pymodule]
-fn lshpy(_py: Python, m: &PyModule) -> PyResult<()> {
+fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<LshL2>()?;
     m.add_class::<LshMips>()?;
     m.add_class::<LshSrp>()?;
@@ -115,6 +115,26 @@ impl Base {
         };
         Ok(())
     }
+
+    fn _commit(&mut self) -> IntResult<()> {
+        match &mut self.lsh {
+            LshTypes::L2(lsh) => lsh.commit()?,
+            LshTypes::Mips(lsh) => lsh.commit()?,
+            LshTypes::Srp(lsh) => lsh.commit()?,
+            LshTypes::Empty => panic!("base not initialized"),
+        };
+        Ok(())
+    }
+
+    fn _init_transaction(&mut self) -> IntResult<()> {
+        match &mut self.lsh {
+            LshTypes::L2(lsh) => lsh.init_transaction()?,
+            LshTypes::Mips(lsh) => lsh.init_transaction()?,
+            LshTypes::Srp(lsh) => lsh.init_transaction()?,
+            LshTypes::Empty => panic!("base not initialized"),
+        };
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -155,6 +175,16 @@ impl Base {
         self._describe()?;
         Ok(())
     }
+
+    fn commit(&mut self) -> PyResult<()> {
+        self._commit()?;
+        Ok(())
+    }
+
+    fn init_transaction(&mut self) -> PyResult<()> {
+        self._init_transaction()?;
+        Ok(())
+    }
 }
 
 #[pyclass(extends=Base)]
@@ -169,9 +199,12 @@ impl LshL2 {
         dim: usize,
         r: f32,
         seed: u64,
+        db_dir: String,
     ) -> PyResult<(Self, Base)> {
         let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
+            .only_index()
+            .set_database_directory(&db_dir)
             .l2(r);
 
         let lsh = match r {
@@ -201,9 +234,12 @@ impl LshMips {
         U: f32,
         m: usize,
         seed: u64,
+        db_dir: String,
     ) -> PyResult<(Self, Base)> {
         let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
+            .only_index()
+            .set_database_directory(&db_dir)
             .mips(r, U, m);
         let lsh = match r {
             Ok(lsh) => lsh,
@@ -229,9 +265,12 @@ impl LshSrp {
         n_hash_tables: usize,
         dim: usize,
         seed: u64,
+        db_dir: String,
     ) -> PyResult<(Self, Base)> {
         let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
+            .only_index()
+            .set_database_directory(&db_dir)
             .srp();
         let lsh = match r {
             Ok(lsh) => lsh,

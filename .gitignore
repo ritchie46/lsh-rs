@@ -4,3 +4,4 @@ Cargo.lock
 *.so
 .ENV
 *.db3*
+wheels/
