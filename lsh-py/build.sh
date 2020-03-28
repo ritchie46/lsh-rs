@@ -1,3 +1,3 @@
-#!/usr/bin/env bash
+#!/usr/floky-bin/env bash
 
 rustup override set nightly

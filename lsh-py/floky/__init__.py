@@ -16,7 +16,7 @@ class Base:
     def store_vec(self, v):
         self.lsh.store_vec(v)
 
-    def store_vecs(self, vs, chunk_size=5000):
+    def store_vecs(self, vs, chunk_size=100):
         length = len(vs)
         i = chunk_size
         prev_i = 0
@@ -49,6 +49,5 @@ class Base:
 
 class L2(Base):
     def __init__(self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_dir="."):
-        print("ONLY INDEX")
-        lsh = _LshL2(n_hash_tables, n_hash_tables, dim, r, seed, db_dir)
+        lsh = _LshL2(n_projections, n_hash_tables, dim, r, seed, db_dir)
         super().__init__(lsh, n_projections, n_hash_tables, dim, db_dir)
