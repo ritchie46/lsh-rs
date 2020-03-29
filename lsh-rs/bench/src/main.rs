@@ -1,6 +1,9 @@
 #![feature(test)]
 extern crate test;
-use lsh_rs::{utils::rand_unit_vec, HashTables, MemoryTable, SignRandomProjections, SqlTable, LSH, SqlTableMem};
+use lsh_rs::{
+    utils::rand_unit_vec, HashTables, MemoryTable, SignRandomProjections, SqlTable, SqlTableMem,
+    LSH,
+};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use test::Bencher;

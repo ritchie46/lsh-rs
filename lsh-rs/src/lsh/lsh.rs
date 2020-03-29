@@ -235,7 +235,6 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         let mut idx = 0;
         for (i, proj) in self.hashers.iter().enumerate() {
             let mut hash = proj.hash_vec_put(v);
-            hash.shrink_to_fit();
 
             let mut ht = self.hash_tables.take().unwrap();
             idx = ht.put(hash, v, i)?;
