@@ -15,3 +15,6 @@ thiserror = "1.0.13"
 [lib]
 name = "floky"
 crate-type = ["cdylib"]
+
+[package.metadata.maturin]
+requires-dist = ["tqdm~=4.40.0"]
