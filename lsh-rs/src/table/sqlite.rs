@@ -225,42 +225,30 @@ impl HashTables for SqlTable {
         }
     }
 
-    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint> {
-        Err(Error::NotImplemented)
-    }
-
-    fn describe(&self) {
-        let mut stmt = match self.conn.prepare(
+    fn describe(&self) -> Result<String> {
+        let mut stmt = self.conn.prepare(
             "SELECT name FROM sqlite_master
 WHERE type='table'
 ORDER BY name;",
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                println!("Sqlite error: {:?}", e);
-                return;
-            }
-        };
-        let mut rows = match stmt.query(NO_PARAMS) {
-            Ok(r) => r,
-            Err(e) => {
-                println!("Sqlite error: {:?}", e);
-                return;
-            }
-        };
-        println!("Tables in sqlite backend:");
+        )?;
+
+        let mut rows = stmt.query(NO_PARAMS)?;
+
+        let mut out = String::from("Tables in sqlite backend:\n");
+
         while let Ok(r) = rows.next() {
             match r {
                 Some(r) => {
                     let v: String = r.get_unwrap(0);
-                    println!("\t{:?}", v);
+                    out.push_str(&format!("\t{:?}\n", v))
                 }
                 None => break,
             }
         }
-        println!("Unique hash values:");
+        out.push_str("Unique hash values:\n");
         let hv = get_unique_hash_int(self.n_hash_tables, &self.conn).unwrap();
-        println!("{:?}", hv)
+        out.push_str(&format!("{:?}", hv));
+        Ok(out)
     }
 
     fn store_hashers<H: VecHash + Serialize>(&mut self, hashers: &[H]) -> Result<()> {

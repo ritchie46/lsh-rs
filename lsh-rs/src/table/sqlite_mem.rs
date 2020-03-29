@@ -54,7 +54,7 @@ impl HashTables for SqlTableMem {
         self.sql_table.idx_to_datapoint(idx)
     }
 
-    fn describe(&self) {
+    fn describe(&self) -> Result<String> {
         self.sql_table.describe()
     }
 

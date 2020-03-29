@@ -8,7 +8,6 @@ use crate::{
 use crate::{DataPoint, DataPointSlice, SqlTable};
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
-use rusqlite::Result as DbResult;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -214,9 +213,8 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         self
     }
 
-    pub fn describe(&self) -> Result<()> {
-        self.hash_tables.as_ref().unwrap().describe();
-        Ok(())
+    pub fn describe(&self) -> Result<String> {
+        self.hash_tables.as_ref().unwrap().describe()
     }
 
     /// Store a single vector in storage. Returns id.

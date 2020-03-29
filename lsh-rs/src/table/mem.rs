@@ -120,7 +120,7 @@ impl HashTables for MemoryTable {
         self.vec_store.increase_storage(size);
     }
 
-    fn describe(&self) {
+    fn describe(&self) -> Result<String> {
         let mut lengths = vec![];
         let mut max_len = 0;
         let mut min_len = 1000000;
@@ -140,13 +140,14 @@ impl HashTables for MemoryTable {
             }
         }
 
-        println!(
+        let out = format!(
             "Bucket lengths: max: {}, min: {}, avg: {}, hash value projections: {:?}",
             max_len,
             min_len,
             lengths.iter().sum::<usize>() as f32 / lengths.len() as f32,
             set
-        )
+        );
+        Ok(out)
     }
 
     fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive> {
