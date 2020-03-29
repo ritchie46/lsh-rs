@@ -14,9 +14,9 @@ fn store_n(n: usize, dim: usize, index_only: bool) -> LSH<MemoryTable, SignRando
 
     let mut lsh;
     if index_only {
-        lsh = LSH::new(20, 7, 100).seed(1).only_index().srp();
+        lsh = LSH::new(20, 7, 100).seed(1).only_index().srp().unwrap();
     } else {
-        lsh = LSH::new(20, 7, 100).seed(1).srp();
+        lsh = LSH::new(20, 7, 100).seed(1).srp().unwrap();
     }
     lsh.store_vecs(&v);
     lsh
