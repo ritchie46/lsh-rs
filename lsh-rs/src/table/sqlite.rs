@@ -11,13 +11,13 @@ use std::cell::Cell;
 use std::io::Write;
 use std::mem;
 
-fn hash_to_blob(hash: &[i32]) -> &[u8] {
+fn hash_to_blob(hash: &[HashPrimitive]) -> &[u8] {
     let data = hash.as_ptr() as *const u8;
     unsafe { std::slice::from_raw_parts(data, hash.len() * std::mem::size_of::<HashPrimitive>()) }
 }
 
-fn blob_to_hash(blob: &[u8]) -> &[i32] {
-    let data = blob.as_ptr() as *const i32;
+fn blob_to_hash(blob: &[u8]) -> &[HashPrimitive] {
+    let data = blob.as_ptr() as *const HashPrimitive;
     unsafe { std::slice::from_raw_parts(data, blob.len() / std::mem::size_of::<HashPrimitive>()) }
 }
 
@@ -358,9 +358,9 @@ mod test {
     fn test_blob_hash_casting() {
         for hash in vec![
             &vec![2, 3, 4],
-            &vec![-200, 687, 1245],
+            &vec![-124, 32, 89],
             &vec![1, 2, 3, 4, 5, 6],
-            &vec![-8979875, -2, -3, 1, 2, 3, 4, 5, 6],
+            &vec![-12, -2, -3, 1, 2, 3, 4, 5, 6],
         ] {
             let hash = &hash[..];
             let blob = hash_to_blob(hash);

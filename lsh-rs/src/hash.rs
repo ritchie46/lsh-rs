@@ -4,7 +4,7 @@ use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use serde::{Deserialize, Serialize};
 
-pub type HashPrimitive = i32;
+pub type HashPrimitive = i8;
 pub type Hash = Vec<HashPrimitive>;
 
 pub trait VecHash {
@@ -34,7 +34,7 @@ impl SignRandomProjections {
     }
 
     fn hash_vec(&self, v: &[f32]) -> Hash {
-        let mut hash: Vec<i32> = vec![0; self.hyperplanes.len_of(Axis(1))];
+        let mut hash: Hash = vec![0; self.hyperplanes.len_of(Axis(1))];
 
         let v = aview1(v);
 
@@ -83,7 +83,7 @@ impl L2 {
 
     fn hash_vec(&self, v: &[f32]) -> Hash {
         let h = (self.a.dot(&aview1(v)) + &self.b) / self.r;
-        let h = h.map(|x| x.floor() as i32);
+        let h = h.map(|x| x.floor() as HashPrimitive);
         h.iter().copied().collect()
     }
 }

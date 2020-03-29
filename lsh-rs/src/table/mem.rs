@@ -124,11 +124,12 @@ impl HashTables for MemoryTable {
         let mut lengths = vec![];
         let mut max_len = 0;
         let mut min_len = 1000000;
-        let mut set: FnvHashSet<i32> = FnvHashSet::default();
+        let mut set: FnvHashSet<HashPrimitive> = FnvHashSet::default();
         for map in self.hash_tables.iter() {
             for (k, v) in map.iter() {
                 let len = v.len();
-                let hash_values: FnvHashSet<i32> = FnvHashSet::from_iter(k.iter().copied());
+                let hash_values: FnvHashSet<HashPrimitive> =
+                    FnvHashSet::from_iter(k.iter().copied());
                 set = set.union(&hash_values).copied().collect();
                 lengths.push(len);
                 if len > max_len {
