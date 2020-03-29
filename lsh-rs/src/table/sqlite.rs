@@ -4,7 +4,7 @@ use crate::{
     DataPoint, DataPointSlice, Error, HashTables, Result, VecHash,
 };
 use fnv::FnvHashSet;
-use rusqlite::{params, Connection, Error as DbError, Result as DbResult, NO_PARAMS};
+use rusqlite::{params, Connection, NO_PARAMS};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cell::Cell;
@@ -21,7 +21,7 @@ fn blob_to_hash(blob: &[u8]) -> &[i32] {
     unsafe { std::slice::from_raw_parts(data, blob.len() / std::mem::size_of::<HashPrimitive>()) }
 }
 
-fn query_bucket(blob: &[u8], table_name: &str, connection: &Connection) -> DbResult<Bucket> {
+fn query_bucket(blob: &[u8], table_name: &str, connection: &Connection) -> Result<Bucket> {
     let mut stmt = connection.prepare_cached(&format!(
         "
 SELECT (id) FROM {}
@@ -38,7 +38,7 @@ WHERE hash = ?
     Ok(bucket)
 }
 
-fn make_table(table_name: &str, connection: &Connection) -> DbResult<()> {
+fn make_table(table_name: &str, connection: &Connection) -> Result<()> {
     connection.execute_batch(&format!(
         "CREATE TABLE IF NOT EXISTS {} (
              hash       BLOB,
@@ -51,27 +51,7 @@ fn make_table(table_name: &str, connection: &Connection) -> DbResult<()> {
     Ok(())
 }
 
-fn table_exists(table_name: &str, connection: &Connection) -> DbResult<bool> {
-    let mut stmt = connection.prepare(&format!(
-        "SELECT name FROM
-sqlite_master WHERE type='table' AND name='{}';",
-        table_name
-    ))?;
-    let mut rows = stmt.query(NO_PARAMS)?;
-
-    let row = rows.next()?;
-    match row {
-        None => Ok(false),
-        Some(_row) => Ok(true),
-    }
-}
-
-fn insert_table(
-    table_name: &str,
-    hash: &Hash,
-    idx: u32,
-    connection: &Connection,
-) -> DbResult<usize> {
+fn insert_table(table_name: &str, hash: &Hash, idx: u32, connection: &Connection) -> Result<usize> {
     let blob = hash_to_blob(hash);
     let mut stmt = connection.prepare_cached(&format!(
         "
@@ -80,7 +60,8 @@ VALUES (?1, ?2)
         ",
         table_name
     ))?;
-    stmt.execute(params![blob, idx])
+    let idx = stmt.execute(params![blob, idx])?;
+    Ok(idx)
 }
 
 pub struct SqlTable {
@@ -108,7 +89,7 @@ fn get_table_names(n_hash_tables: usize) -> Vec<String> {
 fn get_unique_hash_int(
     n_hash_tables: usize,
     conn: &Connection,
-) -> DbResult<FnvHashSet<HashPrimitive>> {
+) -> Result<FnvHashSet<HashPrimitive>> {
     let mut hash_numbers = FnvHashSet::default();
     for table_name in get_table_names(n_hash_tables) {
         let mut stmt = conn.prepare(&format!["SELECT hash FROM {} LIMIT 100;", table_name])?;
@@ -125,14 +106,14 @@ fn get_unique_hash_int(
     Ok(hash_numbers)
 }
 
-fn init_table(conn: &Connection, table_names: &[String]) -> DbResult<()> {
+fn init_table(conn: &Connection, table_names: &[String]) -> Result<()> {
     for table_name in table_names {
         make_table(&table_name, &conn)?;
     }
     Ok(())
 }
 
-fn init_db_setttings(conn: &Connection) -> DbResult<()> {
+fn init_db_setttings(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
     PRAGMA synchronous = OFF;
@@ -177,7 +158,7 @@ impl SqlTable {
         Ok(())
     }
 
-    pub fn init_transaction(&self) -> DbResult<()> {
+    pub fn init_transaction(&self) -> Result<()> {
         self.committed.set(false);
         self.conn.execute_batch("BEGIN TRANSACTION;")?;
         Ok(())
@@ -207,8 +188,8 @@ impl HashTables for SqlTable {
 
         match r {
             Ok(_) => Ok(idx),
-            Err(DbError::SqliteFailure(_, _)) => Ok(idx),
-            Err(e) => panic!(format!("could not insert in db: {:?}", e)),
+            Err(Error::SqlFailure(_)) => Ok(idx), // duplicates
+            Err(e) => Err(Error::Failed(format!("{:?}", e))),
         }
     }
 
@@ -332,18 +313,5 @@ mod test {
             let hash_back = blob_to_hash(blob);
             assert_eq!(hash, hash_back)
         }
-    }
-
-    #[test]
-    fn test_table_exist() {
-        // connection w/ table
-        let conn = Connection::open_in_memory().expect("could not open sqlite");
-        let table_names = vec!["table_0".to_string()];
-        init_table(&conn, &table_names).expect("could not make tables");
-        assert_eq!(Ok(true), table_exists(&table_names[0], &conn));
-        conn.close().unwrap();
-        // new connection wo/ tables
-        let conn = Connection::open_in_memory().expect("could not open sqlite");
-        assert_eq!(Ok(false), table_exists(&table_names[0], &conn));
     }
 }
