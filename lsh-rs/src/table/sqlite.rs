@@ -270,7 +270,8 @@ ORDER BY name;",
         let mut max = Vec::with_capacity(self.n_hash_tables);
 
         // maximum 3 tables will be used in stats
-        for table_name in &tables[..3] {
+        let i = std::cmp::min(3, self.n_hash_tables);
+        for table_name in &tables[..i] {
             let stats = hash_table_stats(&table_name, 5000, &self.conn)?;
             avg.push(stats.0);
             std_dev.push(stats.1);
