@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate test;
-use lsh_rs::{utils::rand_unit_vec, HashTables, MemoryTable, SignRandomProjections, SqlTable, LSH};
+use lsh_rs::{utils::rand_unit_vec, HashTables, MemoryTable, SignRandomProjections, SqlTable, LSH, SqlTableMem};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use test::Bencher;
@@ -49,7 +49,7 @@ fn bench_query(b: &mut Bencher) {
 
 #[bench]
 fn bench_sqlite(b: &mut Bencher) {
-    let mut sql = SqlTable::new_in_mem(1, true);
+    let mut sql = SqlTableMem::new(1, true, ".").unwrap();
     let v = vec![1., 2.];
     let hash = vec![1, 2];
     b.iter(|| {

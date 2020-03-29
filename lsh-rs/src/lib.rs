@@ -105,7 +105,7 @@ mod error;
 pub mod utils;
 pub use crate::lsh::lsh::{LshMem, LshSql, LshSqlMem, LSH};
 pub use hash::{Hash, HashPrimitive, SignRandomProjections, VecHash, L2, MIPS};
-pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable};
+pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_mem::SqlTableMem};
 #[cfg(feature = "stats")]
 pub mod stats;
 
