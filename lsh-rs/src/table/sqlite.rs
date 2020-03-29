@@ -64,6 +64,39 @@ VALUES (?1, ?2)
     Ok(idx)
 }
 
+fn hash_table_stats(
+    table_name: &str,
+    limit: u32,
+    conn: &Connection,
+) -> Result<(f64, f64, u32, u32)> {
+    let mut stmt = conn.prepare_cached(&format!(
+        "
+SELECT
+	avg(c) as mean,
+	avg(c * c) - avg(c) * avg(c) as variance,
+	min(c) as minimum,
+	max(c) as maximum
+
+FROM (
+	SELECT count(id) as c
+	FROM {}
+	GROUP BY hash
+	LIMIT ?
+);
+    ",
+        table_name
+    ))?;
+    let out = stmt.query_row(params![limit], |row| {
+        let mean: f64 = row.get(0)?;
+        let variance: f64 = row.get(1)?;
+        let stdev = variance.powf(0.5);
+        let minimum: u32 = row.get(2)?;
+        let maximum: u32 = row.get(3)?;
+        Ok((mean, stdev, minimum, maximum))
+    })?;
+    Ok(out)
+}
+
 pub struct SqlTable {
     n_hash_tables: usize,
     only_index_storage: bool, // for now only supported
@@ -229,6 +262,26 @@ ORDER BY name;",
         out.push_str("Unique hash values:\n");
         let hv = get_unique_hash_int(self.n_hash_tables, &self.conn).unwrap();
         out.push_str(&format!("{:?}", hv));
+
+        let tables = get_table_names(self.n_hash_tables);
+        let mut avg = Vec::with_capacity(self.n_hash_tables);
+        let mut std_dev = Vec::with_capacity(self.n_hash_tables);
+        let mut min = Vec::with_capacity(self.n_hash_tables);
+        let mut max = Vec::with_capacity(self.n_hash_tables);
+
+        // maximum 3 tables will be used in stats
+        for table_name in &tables[..3] {
+            let stats = hash_table_stats(&table_name, 5000, &self.conn)?;
+            avg.push(stats.0);
+            std_dev.push(stats.1);
+            min.push(stats.2);
+            max.push(stats.3);
+        }
+        out.push_str("\nHash collisions:\n");
+        out.push_str(&format!("avg:\t{:?}\n", avg));
+        out.push_str(&format!("std-dev:\t{:?}\n", std_dev));
+        out.push_str(&format!("min:\t{:?}\n", min));
+        out.push_str(&format!("max:\t{:?}\n", max));
         Ok(out)
     }
 
