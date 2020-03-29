@@ -11,7 +11,7 @@ class Base:
         self.db_dir = db_dir
 
     def describe(self):
-        self.lsh.describe()
+        print(self.lsh.describe())
 
     def store_vec(self, v):
         self.lsh.store_vec(v)
@@ -32,10 +32,10 @@ class Base:
         self.commit()
 
     def query_bucket(self, v):
-        self.lsh.query_bucket(v)
+        return self.lsh.query_bucket(v)
 
     def query_bucket_idx(self, v):
-        self.lsh.delete_vecket_idx(v)
+        return self.lsh.query_bucket_idx(v)
 
     def delete_vec(self, v):
         self.lsh.delete_vec(v)

@@ -106,14 +106,14 @@ impl Base {
         Ok(())
     }
 
-    fn _describe(&mut self) -> IntResult<()> {
-        match &mut self.lsh {
+    fn _describe(&mut self) -> IntResult<String> {
+        let s = match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.describe()?,
             LshTypes::Mips(lsh) => lsh.describe()?,
             LshTypes::Srp(lsh) => lsh.describe()?,
             LshTypes::Empty => panic!("base not initialized"),
         };
-        Ok(())
+        Ok(s)
     }
 
     fn _commit(&mut self) -> IntResult<()> {
@@ -171,9 +171,9 @@ impl Base {
         Ok(())
     }
 
-    fn describe(&mut self) -> PyResult<()> {
-        self._describe()?;
-        Ok(())
+    fn describe(&mut self) -> PyResult<String> {
+        let s = self._describe()?;
+        Ok(s)
     }
 
     fn commit(&mut self) -> PyResult<()> {
