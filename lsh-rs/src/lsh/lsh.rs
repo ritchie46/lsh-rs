@@ -233,13 +233,12 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         self.validate_vec(v)?;
 
         let mut idx = 0;
+        let mut ht = self.hash_tables.take().unwrap();
         for (i, proj) in self.hashers.iter().enumerate() {
             let mut hash = proj.hash_vec_put(v);
-
-            let mut ht = self.hash_tables.take().unwrap();
             idx = ht.put(hash, v, i)?;
-            self.hash_tables.replace(ht);
         }
+        self.hash_tables.replace(ht);
         Ok(idx)
     }
 

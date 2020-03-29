@@ -148,9 +148,10 @@ fn init_table(conn: &Connection, table_names: &[String]) -> Result<()> {
 
 fn init_db_setttings(conn: &Connection) -> Result<()> {
     conn.execute_batch(
-        "PRAGMA journal_mode = WAL;
+        "PRAGMA journal_mode = OFF;
     PRAGMA synchronous = OFF;
-     PRAGMA main.locking_mode=EXCLUSIVE;",
+    PRAGMA cache_size = 100000;
+    PRAGMA main.locking_mode=EXCLUSIVE;",
     )?;
     Ok(())
 }
