@@ -6,6 +6,7 @@ use crate::{
     Error, Result,
 };
 use crate::{DataPoint, DataPointSlice, SqlTable};
+use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
 use serde::de::DeserializeOwned;
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::{mpsc, Mutex};
 
 pub type LshSql<H> = LSH<SqlTable, H>;
 pub type LshSqlMem<H> = LSH<SqlTableMem, H>;
@@ -138,7 +140,7 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-impl<H: VecHash, T: HashTables> LSH<T, H> {
+impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -235,7 +237,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         let mut idx = 0;
         let mut ht = self.hash_tables.take().unwrap();
         for (i, proj) in self.hashers.iter().enumerate() {
-            let mut hash = proj.hash_vec_put(v);
+            let hash = proj.hash_vec_put(v);
             idx = ht.put(hash, v, i)?;
         }
         self.hash_tables.replace(ht);
@@ -262,7 +264,29 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             .as_mut()
             .unwrap()
             .increase_storage(vs.len());
-        vs.iter().map(|x| self.store_vec(x)).collect()
+
+        // one thread prepares hashes, while the other loads the hashes in the hashtables.
+        let (tx, rx) = unbounded();
+        let hashers = &self.hashers;
+        crossbeam::scope(|s| {
+            s.spawn(|_| {
+                vs.iter().for_each(|v| {
+                    for (i, proj) in hashers.iter().enumerate() {
+                        let hash = proj.hash_vec_put(v);
+                        tx.send((hash, v, i)).unwrap();
+                    }
+                });
+                drop(tx)
+            });
+        });
+
+        let mut ht = self.hash_tables.take().unwrap();
+        let mut insert_idx = Vec::with_capacity(vs.len());
+        for (hash, v, i) in rx {
+            insert_idx.push(ht.put(hash, v, i)?);
+        }
+        self.hash_tables.replace(ht);
+        Ok(insert_idx)
     }
 
     fn query_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {

@@ -14,7 +14,7 @@ pub trait VecHash {
 
 /// Also called SimHash.
 /// A family of hashers for the cosine similarity.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SignRandomProjections {
     ///  Random unit vectors that will lead to the bits of the hash.
     hyperplanes: Array2<f32>,
@@ -58,7 +58,7 @@ impl VecHash for SignRandomProjections {
 }
 
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct L2 {
     a: Array2<f32>,
     r: f32,
@@ -99,7 +99,7 @@ impl VecHash for L2 {
 }
 
 /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MIPS {
     U: f32,
     M: f32,
