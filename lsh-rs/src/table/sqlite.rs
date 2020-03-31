@@ -42,8 +42,7 @@ fn make_table(table_name: &str, connection: &Connection) -> Result<()> {
     connection.execute_batch(&format!(
         "CREATE TABLE IF NOT EXISTS {} (
              hash       BLOB,
-             id         INTEGER,
-             PRIMARY KEY (hash, id)
+             id         INTEGER
             )
                 ",
         table_name
@@ -195,6 +194,19 @@ impl SqlTable {
     pub fn init_transaction(&self) -> Result<()> {
         self.committed.set(false);
         self.conn.execute_batch("BEGIN TRANSACTION;")?;
+        Ok(())
+    }
+
+    pub fn index_hash(&self) -> Result<()> {
+        self.commit()?;
+        for tbl_name in get_table_names(self.n_hash_tables) {
+            self.conn.execute_batch(&format!(
+                "
+                CREATE INDEX hash_index_{}
+                ON {} (hash);",
+                tbl_name, tbl_name
+            ))?;
+        }
         Ok(())
     }
 }

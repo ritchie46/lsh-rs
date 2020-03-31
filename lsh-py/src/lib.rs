@@ -135,6 +135,16 @@ impl Base {
         };
         Ok(())
     }
+
+    fn _index(&self) -> IntResult<()> {
+        match &self.lsh {
+            LshTypes::L2(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
+            LshTypes::Mips(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
+            LshTypes::Srp(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
+            LshTypes::Empty => panic!("base not initialized"),
+        };
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -183,6 +193,11 @@ impl Base {
 
     fn init_transaction(&mut self) -> PyResult<()> {
         self._init_transaction()?;
+        Ok(())
+    }
+
+    fn index(&self) -> PyResult<()> {
+        self._index()?;
         Ok(())
     }
 }

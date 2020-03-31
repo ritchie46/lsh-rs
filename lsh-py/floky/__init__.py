@@ -30,6 +30,8 @@ class Base:
                 self.commit()
                 self.init_transaction()
         self.commit()
+        print("start indexing...")
+        self.index()
 
     def query_bucket(self, v):
         return self.lsh.query_bucket(v)
@@ -45,6 +47,9 @@ class Base:
 
     def init_transaction(self):
         self.lsh.init_transaction()
+
+    def index(self):
+        self.lsh.index()
 
 
 class L2(Base):
