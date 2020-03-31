@@ -71,7 +71,8 @@ pub fn sample_params(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let vs = select_and_scale_vecs(0, n, conn).expect("could not get vecs");
     let dim = vs[0].len();
-    let mut results = optimize_l2_params(delta, dim, &vs)?;
+    let k: Vec<usize> = (10..20).map(|a| a as usize).collect();
+    let mut results = optimize_l2_params(delta, dim, &k, &vs)?;
 
     // now only ran on a sample n of N.
     // search_time is expected to increase by N/n (due to duplicates)
