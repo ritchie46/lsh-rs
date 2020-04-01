@@ -13,14 +13,14 @@ use std::mem;
 use std::os::raw::c_int;
 use std::time::Duration;
 
-fn hash_to_blob(hash: &[HashPrimitive]) -> &[u8] {
+fn vec_to_blob<T>(hash: &[T]) -> &[u8] {
     let data = hash.as_ptr() as *const u8;
-    unsafe { std::slice::from_raw_parts(data, hash.len() * std::mem::size_of::<HashPrimitive>()) }
+    unsafe { std::slice::from_raw_parts(data, hash.len() * std::mem::size_of::<T>()) }
 }
 
-fn blob_to_hash(blob: &[u8]) -> &[HashPrimitive] {
-    let data = blob.as_ptr() as *const HashPrimitive;
-    unsafe { std::slice::from_raw_parts(data, blob.len() / std::mem::size_of::<HashPrimitive>()) }
+fn blob_to_vec<T>(blob: &[u8]) -> &[T] {
+    let data = blob.as_ptr() as *const T;
+    unsafe { std::slice::from_raw_parts(data, blob.len() / std::mem::size_of::<T>()) }
 }
 
 fn query_bucket(blob: &[u8], table_name: &str, connection: &Connection) -> Result<Bucket> {
@@ -53,7 +53,7 @@ fn make_table(table_name: &str, connection: &Connection) -> Result<()> {
 }
 
 fn insert_table(table_name: &str, hash: &Hash, idx: u32, connection: &Connection) -> Result<usize> {
-    let blob = hash_to_blob(hash);
+    let blob = vec_to_blob(hash);
     let mut stmt = connection.prepare_cached(&format!(
         "
 INSERT INTO {} (hash, id)
@@ -131,7 +131,7 @@ fn get_unique_hash_int(
 
         while let Some(r) = rows.next()? {
             let blob: Vec<u8> = r.get(0)?;
-            let hash = blob_to_hash(&blob);
+            let hash = blob_to_vec(&blob);
             hash.iter().for_each(|&v| {
                 hash_numbers.insert(v);
             })
@@ -255,7 +255,7 @@ impl HashTables for SqlTable {
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket> {
         self.commit()?;
         let table_name = fmt_table_name(hash_table);
-        let blob = hash_to_blob(hash);
+        let blob = vec_to_blob(hash);
         let res = query_bucket(blob, &table_name, &self.conn);
 
         match res {
@@ -388,8 +388,8 @@ mod test {
             &vec![-12, -2, -3, 1, 2, 3, 4, 5, 6],
         ] {
             let hash = &hash[..];
-            let blob = hash_to_blob(hash);
-            let hash_back = blob_to_hash(blob);
+            let blob = vec_to_blob(hash);
+            let hash_back: &[i32] = blob_to_vec(blob);
             assert_eq!(hash, hash_back)
         }
     }
