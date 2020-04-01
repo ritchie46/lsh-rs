@@ -1,4 +1,3 @@
-
 [workspace]
 
 members = [
@@ -9,3 +8,8 @@ members = [
     "examples/reverse-img-search/bench",
     "lsh-rs/floky-bin"
 ]
+
+[profile.release]
+codegen-units = 1
+target-cpu = "native"
+lto = "fat"

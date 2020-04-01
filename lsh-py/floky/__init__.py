@@ -1,8 +1,12 @@
 from .floky import LshL2, LshSrp
 from tqdm import tqdm
-from scipy.spatial.distance import euclidean, cosine
+from scipy.spatial.distance import cdist
 import numpy as np
 import os
+from collections import namedtuple
+
+
+QueryResult = namedtuple("QueryResult", ["index", "vectors", "n_collisions", "distances"])
 
 
 class Base:
@@ -64,17 +68,29 @@ class Base:
         self.data = X
         self.store_vecs(X, chunk_size)
 
-    def _predict(self, x, distance_f, bounded):
+    def _predict(self, x, distance_f, bound):
         idx = np.array(self.query_bucket_idx(x))
-        print(f"no. of collisions: {len(idx)}")
-        if bounded:
-            idx = idx[: 3 * self.n_hash_tables]
-        dist = np.array([distance_f(x, self.data[i]) for i in idx])
-        idx = dist.argsort()
-        mask = dist < 1
-        idx = idx[mask]
-        print(f"no. of valid collisions: {len(idx)}")
-        return idx, self.data[idx]
+        n_collisions = len(idx)
+
+        step = bound * self.n_hash_tables
+        i = 0
+        j = step
+
+        while i < n_collisions:
+            b_idx = idx[i: j]
+            i = j
+            j += step
+            dist = cdist(x[None, :], self.data[b_idx], metric=distance_f)
+
+            mask = dist < 1
+            if mask.sum() > 0:
+                break
+        dist = dist[mask]
+        sorted_idx = dist.argsort()
+        idx = b_idx[mask][sorted_idx]
+        distances = dist[sorted_idx]
+
+        return QueryResult(idx, self.data[idx], n_collisions, distances)
 
     def clean(self):
         os.remove(self.db_path)
@@ -98,12 +114,12 @@ class L2(Base):
             self.n_hash_tables,
             self.dim,
             self.r,
-            self.db_path,
             self.seed,
+            self.db_path,
         )
 
-    def predict(self, x, bounded=True):
-        return self._predict(x, euclidean, bounded)
+    def predict(self, x, bound=3):
+        return self._predict(x, 'euclidean', bound)
 
 
 class CosineSim(Base):
@@ -117,5 +133,5 @@ class CosineSim(Base):
             self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed
         )
 
-    def predict(self, x, bounded=True):
-        return self._predict(x, cosine, bounded)
+    def predict(self, x, bound=3):
+        return self._predict(x, 'cosine', bound)

@@ -10,4 +10,4 @@ uninstall:
 	pip uninstall floky -y
 
 clean: uninstall
-	@rm wheels/*
+	@-rm wheels/*
