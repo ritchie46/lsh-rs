@@ -3,8 +3,8 @@
 build:
 	maturin build --release -o wheels -i /opt/miniconda3/bin/python
 
-install: uninstall build
-	pip install wheels/floky-0.1.0-cp37-cp37m-linux_x86_64.whl
+install: clean uninstall build
+	pip install wheels/floky*.whl
 
 uninstall:
 	pip uninstall floky -y

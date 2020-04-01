@@ -41,7 +41,7 @@ pub struct LSH<T: HashTables, H: VecHash> {
     _multi_probe_n_perturbations: usize,
     /// Length of probing sequence
     _multi_probe_n_probes: usize,
-    _db_dir: String,
+    _db_path: String,
 }
 
 /// Create a new LSH instance. Used in the builder pattern
@@ -49,7 +49,7 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
     lsh: &mut LSH<T, H>,
     hashers: Vec<H>,
 ) -> Result<LSH<T, H>> {
-    let mut ht = *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_dir)?;
+    let mut ht = *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_path)?;
 
     // Load hashers if store hashers fails. (i.e. exists)
     let hashers = match ht.store_hashers(&hashers) {
@@ -70,7 +70,7 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
         _multi_probe: lsh._multi_probe,
         _multi_probe_n_perturbations: lsh._multi_probe_n_perturbations,
         _multi_probe_n_probes: lsh._multi_probe_n_probes,
-        _db_dir: lsh._db_dir.clone(),
+        _db_path: lsh._db_path.clone(),
     };
     Ok(lsh)
 }
@@ -161,7 +161,7 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
             _multi_probe: false,
             _multi_probe_n_perturbations: 3,
             _multi_probe_n_probes: 16,
-            _db_dir: ".".to_string(),
+            _db_path: "./lsh.db3".to_string(),
         };
         lsh
     }
@@ -211,7 +211,7 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
     }
 
     pub fn set_database_directory(&mut self, path: &str) -> &mut Self {
-        self._db_dir = path.to_string();
+        self._db_path = path.to_string();
         self
     }
 

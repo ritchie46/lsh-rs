@@ -212,10 +212,9 @@ impl SqlTable {
 }
 
 impl HashTables for SqlTable {
-    fn new(n_hash_tables: usize, only_index_storage: bool, db_dir: &str) -> Result<Box<Self>> {
-        let mut path = std::path::Path::new(db_dir);
-        let buf = path.with_file_name("lsh.db3");
-        let conn = Connection::open(&buf)?;
+    fn new(n_hash_tables: usize, only_index_storage: bool, db_path: &str) -> Result<Box<Self>> {
+        let path = std::path::Path::new(db_path);
+        let conn = Connection::open(path)?;
         SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn).map(|tbl| Box::new(tbl))
     }
 
