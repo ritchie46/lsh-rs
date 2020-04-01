@@ -145,6 +145,16 @@ impl Base {
         };
         Ok(())
     }
+
+    fn _to_mem(&mut self, pages_per_step: usize) -> IntResult<()> {
+        match &mut self.lsh {
+            LshTypes::L2(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
+            LshTypes::Mips(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
+            LshTypes::Srp(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
+            LshTypes::Empty => panic!("base not initialized"),
+        };
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -198,6 +208,11 @@ impl Base {
 
     fn index(&self) -> PyResult<()> {
         self._index()?;
+        Ok(())
+    }
+
+    fn to_mem(&mut self, pages_per_step: usize) -> PyResult<()> {
+        self._to_mem(pages_per_step)?;
         Ok(())
     }
 }

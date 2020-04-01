@@ -10,6 +10,8 @@ use serde::Serialize;
 use std::cell::Cell;
 use std::io::Write;
 use std::mem;
+use std::os::raw::c_int;
+use std::time::Duration;
 
 fn hash_to_blob(hash: &[HashPrimitive]) -> &[u8] {
     let data = hash.as_ptr() as *const u8;
@@ -194,6 +196,17 @@ impl SqlTable {
     pub fn init_transaction(&self) -> Result<()> {
         self.committed.set(false);
         self.conn.execute_batch("BEGIN TRANSACTION;")?;
+        Ok(())
+    }
+
+    pub fn to_mem(&mut self, pages_per_step: usize) -> Result<()> {
+        let mut new_con = rusqlite::Connection::open_in_memory()?;
+        {
+            let backup = rusqlite::backup::Backup::new(&self.conn, &mut new_con)?;
+            backup.run_to_completion(pages_per_step as c_int, Duration::from_nanos(0), None)?;
+        }
+        self.conn = new_con;
+        self.committed.set(true);
         Ok(())
     }
 

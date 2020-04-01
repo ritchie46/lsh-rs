@@ -28,7 +28,7 @@ class Base:
 
         with tqdm(total=length) as pbar:
             while i < length:
-                self.lsh.store_vecs(vs[prev_i: i])
+                self.lsh.store_vecs(vs[prev_i:i])
                 prev_i = i
                 i += chunk_size
                 pbar.update(chunk_size)
@@ -79,16 +79,28 @@ class Base:
     def clean(self):
         os.remove(self.db_path)
 
+    def to_mem(self, pages_per_step=100):
+        self.lsh.to_mem(pages_per_step)
+
 
 class L2(Base):
-    def __init__(self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3"):
+    def __init__(
+        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3"
+    ):
         lsh = LshL2(n_projections, n_hash_tables, dim, r, seed, db_path)
         self.r = r
         super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed)
 
     def reset(self):
         self.clean()
-        self.lsh = LshL2(self.n_projection, self.n_hash_tables, self.dim, self.r, self.db_path, self.seed)
+        self.lsh = LshL2(
+            self.n_projection,
+            self.n_hash_tables,
+            self.dim,
+            self.r,
+            self.db_path,
+            self.seed,
+        )
 
     def predict(self, x, bounded=True):
         return self._predict(x, euclidean, bounded)
@@ -101,7 +113,9 @@ class CosineSim(Base):
 
     def reset(self):
         self.clean()
-        self.lsh = LshSrp(self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed)
+        self.lsh = LshSrp(
+            self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed
+        )
 
     def predict(self, x, bounded=True):
         return self._predict(x, cosine, bounded)
