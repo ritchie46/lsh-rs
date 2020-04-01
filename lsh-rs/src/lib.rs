@@ -83,7 +83,7 @@
 //! lsh-rs = {version ="x.x"}, features=["blas"]}
 //! ndarray = {version = "0.13", features=["blas"]}
 //! # Or any other blas backend.
-//! blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]}
+//! blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}
 //! ```
 #![allow(dead_code, non_snake_case)]
 #[cfg(feature = "blas")]

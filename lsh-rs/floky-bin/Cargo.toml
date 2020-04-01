@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 lsh-rs = {path = "..", features=["blas"]}
-blas-src = { version = "0.5", defeault-features = false, features = ["openblas"]}
+blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}

@@ -1,4 +1,4 @@
-from .floky import LshL2 as _LshL2
+from .floky import LshL2, LshSrp
 from tqdm import tqdm
 
 
@@ -54,5 +54,12 @@ class Base:
 
 class L2(Base):
     def __init__(self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_dir="."):
-        lsh = _LshL2(n_projections, n_hash_tables, dim, r, seed, db_dir)
+        lsh = LshL2(n_projections, n_hash_tables, dim, r, seed, db_dir)
         super().__init__(lsh, n_projections, n_hash_tables, dim, db_dir)
+
+
+class CosineSim(Base):
+    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_dir="."):
+        lsh = LshSrp(n_projections, n_hash_tables, dim, seed, db_dir)
+        super().__init__(lsh, n_projections, n_hash_tables, dim, db_dir)
+
