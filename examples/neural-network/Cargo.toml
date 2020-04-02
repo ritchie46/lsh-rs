@@ -1,0 +1,14 @@
+[package]
+name = "neural-network"
+version = "0.1.0"
+authors = ["ritchie46 <ritchie46@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lsh-rs = {path = "../../lsh-rs", features=["blas", "stats"]}
+blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}
+ndarray = {version = "0.13", features=["blas", "rayon"]}
+ndarray-rand = "0.11.0"
+fnv = "1.0.6"
