@@ -1,10 +1,10 @@
 use crate::activations::Activation;
 
-pub enum Loss {
-    MSE(Activation),
+pub enum Loss<'a> {
+    MSE(&'a Activation),
 }
 
-impl Loss {
+impl<'a> Loss<'a> {
     fn activation_fn(&self) -> &Activation {
         use Loss::*;
         match self {

@@ -1,5 +1,5 @@
-use crate::activations;
 use crate::activations::Activation;
+use crate::{activations, loss::Loss};
 use fnv::FnvHashMap;
 use lsh_rs::{DataPoint, DataPointSlice, LshMem, SignRandomProjections};
 use ndarray::prelude::*;
@@ -42,15 +42,15 @@ impl MemArena {
     }
 }
 
-struct Network {
+pub struct Network {
     w: Vec<Vec<u32>>,
     // biases for all layers
-    lsh2bias: FnvHashMap<u32, f32>,
+    lsh2bias: Vec<FnvHashMap<u32, f32>>,
     activations: Vec<Activation>,
     lsh_store: Vec<LshMem<SignRandomProjections>>,
     n_layers: usize,
     pool: MemArena,
-    lsh2pool: FnvHashMap<u32, usize>,
+    lsh2pool: Vec<FnvHashMap<u32, usize>>,
     dimensions: Vec<usize>,
 }
 
@@ -64,7 +64,7 @@ impl Network {
     ///         ----------------------------------------
     ///         dimensions =  (2,     3,          3)
     ///         activations = (      ReLU,      Sigmoid)
-    fn new(
+    pub fn new(
         dimensions: Vec<usize>,
         activations: Vec<Activation>,
         n_projections: usize,
@@ -73,16 +73,19 @@ impl Network {
         let n_layers = dimensions.len();
         let mut w = Vec::with_capacity(n_layers);
         let mut pool = MemArena::new();
-        let mut lsh2pool = FnvHashMap::default();
-        let mut lsh2bias = FnvHashMap::default();
-
+        let mut lsh2pool = Vec::with_capacity(n_layers);
+        let mut lsh2bias = Vec::with_capacity(n_layers);
         let mut lsh_store = Vec::with_capacity(n_layers);
 
         for i in 0..(n_layers - 1) {
+            let mut lsh2pool_i = FnvHashMap::default();
+            let mut lsh2bias_i = FnvHashMap::default();
+
             let in_size = dimensions[i];
             let out_size = dimensions[i + 1];
             let n_perceptrons = in_size * out_size;
             let mut w_idx = Vec::with_capacity(n_perceptrons);
+
             let mut lsh = LshMem::new(n_projections, n_hash_tables, in_size)
                 .srp()
                 .unwrap();
@@ -93,12 +96,14 @@ impl Network {
 
                 let lsh_idx = lsh.store_vec(p.as_slice().unwrap()).unwrap();
                 let pool_idx = pool.add(p);
-                lsh2pool.insert(lsh_idx, pool_idx);
-
+                lsh2pool_i.insert(lsh_idx, pool_idx);
+                lsh2bias_i.insert(lsh_idx, 0.);
                 w_idx.push(lsh_idx);
-                lsh2bias.insert(lsh_idx, 0.);
             }
 
+            lsh2pool.push(lsh2pool_i);
+            lsh2bias.push(lsh2bias_i);
+            lsh_store.push(lsh);
             w.push(w_idx);
         }
 
@@ -114,60 +119,88 @@ impl Network {
         }
     }
 
-    fn get_perceptrons(&self, idx: &[u32]) -> Vec<&Perceptron> {
-        let pool_idx: Vec<usize> = idx
-            .iter()
-            .map(|idx| *self.lsh2pool.get(idx).expect("out of bounds idx"))
-            .collect();
-        self.pool.get(&pool_idx)
-    }
+    // fn get_perceptrons(&self, idx: &[u32]) -> Vec<&Perceptron> {
+    //     let pool_idx: Vec<usize> = idx
+    //         .iter()
+    //         .map(|idx| *self.lsh2pool.get(idx).expect("out of bounds idx"))
+    //         .collect();
+    //     self.pool.get(&pool_idx)
+    // }
 
-    fn get_biases(&self, idx: &[u32]) -> Vec<f32> {
+    fn get_biases(&self, layer: usize, idx: &[u32]) -> Vec<f32> {
+        let lsh2bias = self.lsh2bias.get(layer).expect("Could not get bias layer");
         idx.iter()
-            .map(|idx| *self.lsh2bias.get(idx).unwrap())
+            .map(|idx| *lsh2bias.get(idx).expect("Could not get bias"))
             .collect()
     }
 
     fn apply_layer(&self, i: usize, input: &[f32]) -> Vec<Computation> {
         let lsh = &self.lsh_store[i];
         let activation = &self.activations[i];
-        let idx = lsh.query_bucket_ids(input).unwrap();
-        let ps = self.get_perceptrons(&idx);
-        let bias = self.get_biases(&idx);
+        let idx_j = lsh.query_bucket_ids(input).unwrap();
+        let bias = self.get_biases(i, &idx_j);
+
+        // index of the vectors in the pool
+        let lsh2pool_i = &self.lsh2pool[i];
+        let k: Vec<usize> = idx_j
+            .iter()
+            .map(|idx| *(lsh2pool_i.get(idx).unwrap()))
+            .collect();
+        let ps = self.pool.get(&k);
 
         ps.iter()
             .zip(bias)
-            .zip(idx)
-            .map(|((&p, b), j)| {
+            .zip(idx_j)
+            .zip(k)
+            .map(|(((&p, b), j), k)| {
                 let j = j as usize;
                 let z = aview1(input).dot(p) + b;
                 let a = activation.activate(z);
-                Computation { i, j, z, a }
+                Computation { i, j, z, a, k }
             })
             .collect()
     }
 
-    fn forward(&self, x: &[f32]) -> Vec<Vec<Computation>> {
+    pub fn forward(&self, x: &[f32]) -> Vec<Vec<Computation>> {
         let mut comp = Vec::with_capacity(self.n_layers);
 
         // first layer
         let prev_comp = self.apply_layer(0, x);
         comp.push(prev_comp);
 
-        for i in 1..self.n_layers {
+        for i in 1..self.n_layers - 1 {
             let prev_comp = comp.last().unwrap();
             let input = make_input_next_layer(prev_comp, self.dimensions[i]);
             comp.push(self.apply_layer(i, &input))
         }
         comp
     }
+
+    pub fn backprop(&self, comp: &[Vec<Computation>], y_true: &[f32]) {
+        // determine partial derivative and delta for output layer
+        let last_activation = &self.activations[self.activations.len() - 1];
+
+        // iter only over the activations of the last layer
+        // the loop is over all the perceptrons in one layer.
+        for c in &comp[comp.len() - 1] {
+            let delta = Loss::MSE(last_activation).delta(y_true[c.i], c.a);
+            let dw = c.a * delta;
+            // TODO: update params
+
+            // Per perceptron we traverse back all the layers (except the input)
+            for i in ((self.n_layers - 1)..1).step_by(2) {}
+        }
+    }
 }
 
-struct Computation {
+#[derive(Debug)]
+pub struct Computation {
     // the ith layer in the network
     i: usize,
-    // the jth perceptron in the layer
+    // the jth perceptron in the layer (same as lsh idx)
     j: usize,
+    // the kth layer in the memory pool
+    k: usize,
     z: f32,
     a: f32,
 }
