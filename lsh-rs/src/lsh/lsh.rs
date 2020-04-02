@@ -344,7 +344,7 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
             let mut ht = self.hash_tables.take().unwrap();
-            ht.delete(hash, v, i).unwrap_or_default();
+            ht.delete(&hash, v, i).unwrap_or_default();
             self.hash_tables = Some(ht)
         }
         Ok(())

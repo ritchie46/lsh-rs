@@ -41,7 +41,7 @@ impl HashTables for SqlTableMem {
         self.sql_table.put(hash, d, hash_table)
     }
 
-    fn delete(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
+    fn delete(&mut self, hash: &Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
         self.sql_table.delete(hash, d, hash_table)
     }
 

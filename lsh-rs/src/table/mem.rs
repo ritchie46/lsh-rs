@@ -44,6 +44,25 @@ pub struct MemoryTable {
     counter: u32,
 }
 
+impl MemoryTable {
+    fn remove_idx(&mut self, idx: u32, hash: &Hash, hash_table: usize) -> Result<()> {
+        let tbl = &mut self.hash_tables[hash_table];
+        let bucket = tbl.get_mut(hash);
+        match bucket {
+            None => return Err(Error::NotFound),
+            Some(bucket) => {
+                bucket.remove(&idx);
+                Ok(())
+            }
+        }
+    }
+    fn insert_idx(&mut self, idx: u32, hash: Hash, hash_table: usize) {
+        let tbl = &mut self.hash_tables[hash_table];
+        let bucket = tbl.entry(hash).or_insert_with(|| FnvHashSet::default());
+        bucket.insert(idx);
+    }
+}
+
 impl HashTables for MemoryTable {
     fn new(n_hash_tables: usize, only_index_storage: bool, _: &str) -> Result<Box<Self>> {
         // TODO: Check the average number of vectors in the buckets.
@@ -62,12 +81,9 @@ impl HashTables for MemoryTable {
     }
 
     fn put(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<u32> {
-        let tbl = &mut self.hash_tables[hash_table];
-
         // Store hash and id/idx
         let idx = self.counter;
-        let bucket = tbl.entry(hash).or_insert_with(|| FnvHashSet::default());
-        bucket.insert(idx);
+        self.insert_idx(idx, hash, hash_table);
 
         // There are N hash_tables per unique vector. So we only store
         // the unique v hash_table 0 and increment the counter (the id)
@@ -81,7 +97,7 @@ impl HashTables for MemoryTable {
     }
 
     /// Expensive operation we need to do a linear search over all datapoints
-    fn delete(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
+    fn delete(&mut self, hash: &Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
         // First find the data point in the VecStore
         let idx = match self.vec_store.position(d) {
             None => return Ok(()),
@@ -89,17 +105,19 @@ impl HashTables for MemoryTable {
         };
         // Note: data point remains in VecStore as shrinking the vector would mean we need to
         // re-hash all datapoints.
+        self.remove_idx(idx, &hash, hash_table)
+    }
 
-        // Then remove idx from hash tables
-        let tbl = &mut self.hash_tables[hash_table];
-        let bucket = tbl.get_mut(&hash);
-        match bucket {
-            None => return Err(Error::NotFound),
-            Some(bucket) => {
-                bucket.remove(&idx);
-                Ok(())
-            }
-        }
+    fn update_by_idx(
+        &mut self,
+        old_hash: &Hash,
+        new_hash: Hash,
+        idx: u32,
+        hash_table: usize,
+    ) -> Result<()> {
+        self.remove_idx(idx, old_hash, hash_table);
+        self.insert_idx(idx, new_hash, hash_table);
+        Ok(())
     }
 
     /// Query the whole bucket

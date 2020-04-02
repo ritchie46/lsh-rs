@@ -19,8 +19,18 @@ pub trait HashTables {
     /// * `hash_table` - Number of the hash_table to store the vector. Ranging from 0 to L.
     fn put(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<u32>;
 
-    fn delete(&mut self, _hash: Hash, _d: &DataPointSlice, _hash_table: usize) -> Result<()> {
-        Ok(())
+    fn delete(&mut self, _hash: &Hash, _d: &DataPointSlice, _hash_table: usize) -> Result<()> {
+        Err(Error::NotImplemented)
+    }
+
+    fn update_by_idx(
+        &mut self,
+        _old_hash: &Hash,
+        _new_hash: Hash,
+        _idx: u32,
+        _hash_table: usize,
+    ) -> Result<()> {
+        Err(Error::NotImplemented)
     }
 
     /// Query the whole bucket
