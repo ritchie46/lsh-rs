@@ -11,7 +11,10 @@ use std::cell::RefCell;
 type Weight = Array1<f32>;
 
 struct MemArena {
+    // the weights that constantly get updated
     pool: Vec<Weight>,
+    // the original weights. They are only updated during re-hashing
+    pool_backup: Vec<Weight>,
     // Freed indexes will be added to the free buffer.
     free: Vec<usize>,
 }
@@ -20,6 +23,7 @@ impl MemArena {
     fn new() -> Self {
         MemArena {
             pool: vec![],
+            pool_backup: vec![],
             free: vec![],
         }
     }
@@ -42,6 +46,10 @@ impl MemArena {
             .map(|&idx| self.pool.get(idx).expect("out of bounds idx"))
             .collect()
     }
+
+    fn freeze(&mut self) {
+        self.pool_backup = self.pool.clone();
+    }
 }
 
 pub struct Network {
@@ -49,7 +57,7 @@ pub struct Network {
     // biases for all layers
     lsh2bias: Vec<FnvHashMap<u32, f32>>,
     activations: Vec<Activation>,
-    lsh_store: Vec<LshMem<SignRandomProjections>>,
+    lsh_store: Vec<Option<LshMem<SignRandomProjections>>>,
     n_layers: usize,
     pool: MemArena,
     lsh2pool: Vec<FnvHashMap<u32, usize>>,
@@ -83,6 +91,7 @@ impl Network {
         let mut lsh_store = Vec::with_capacity(n_layers);
         let mut rng = create_rng(seed);
 
+        // initialize layers
         for i in 0..(n_layers - 1) {
             let mut lsh2pool_i = FnvHashMap::default();
             let mut lsh2bias_i = FnvHashMap::default();
@@ -96,6 +105,7 @@ impl Network {
                 .srp()
                 .unwrap();
 
+            // initialize vectors per layer.
             for _ in 0..out_size {
                 let p = Array1::random_using(in_size, StandardNormal, &mut rng);
                 let p = p / (in_size as f32).powf(0.5);
@@ -109,9 +119,10 @@ impl Network {
 
             lsh2pool.push(lsh2pool_i);
             lsh2bias.push(lsh2bias_i);
-            lsh_store.push(lsh);
+            lsh_store.push(Some(lsh));
             w.push(w_idx);
         }
+        pool.freeze();
 
         Network {
             w,
@@ -144,14 +155,28 @@ impl Network {
             .expect("could not get mut perceptron")
     }
 
-    pub fn get_weight(&mut self, layer: usize, j: usize) -> &Weight {
-        let pool_idx = self.get_pool_idx(layer, &[j as u32])[0];
+    pub fn get_weight(&self, layer: usize, j: usize) -> &Weight {
+        let pool_idx = *self.lsh2pool[layer]
+            .get(&(j as u32))
+            .expect("neuron index out of bounds");
         self.pool.pool.get(pool_idx).expect("could not get weight")
     }
 
-    pub fn get_weights(&self, layer: usize, j: &[u32]) -> Vec<&Weight> {
-        let pool_idx = self.get_pool_idx(layer, j);
-        self.pool.get(&pool_idx)
+    pub fn get_weight_original(&self, layer: usize, j: usize) -> &Weight {
+        let pool_idx = *self.lsh2pool[layer]
+            .get(&(j as u32))
+            .expect("neuron index out of bounds");
+        self.pool
+            .pool_backup
+            .get(pool_idx)
+            .expect("could not get weight")
+    }
+
+    fn set_pool_backup(&mut self, layer: usize, j: usize) {
+        let pool_idx = *self.lsh2pool[layer]
+            .get(&(j as u32))
+            .expect("neuron index out of bounds");
+        self.pool.pool_backup[pool_idx] = self.pool.pool[pool_idx].clone();
     }
 
     fn get_biases(&self, layer: usize, idx: &[u32]) -> Vec<f32> {
@@ -162,7 +187,7 @@ impl Network {
     }
 
     fn apply_layer(&self, i: usize, input: Vec<f32>) -> Vec<Neuron> {
-        let lsh = &self.lsh_store[i];
+        let lsh = self.lsh_store[i].as_ref().unwrap();
         let activation = &self.activations[i];
         let idx_j = lsh.query_bucket_ids(&input).unwrap();
         let bias = self.get_biases(i, &idx_j);
@@ -251,7 +276,7 @@ impl Network {
 
                         // TODO: outside loop, but brchk doesn't allow it
                         // weights layer before
-                        let w = self.get_weights(layer + 1, &[prev_c.j as u32])[0];
+                        let w = self.get_weight(layer + 1, prev_c.j);
                         // activation layer before
                         let act = &self.activations[layer + 1];
 
@@ -269,8 +294,42 @@ impl Network {
 
     fn update_param(&mut self, dw: Array1<f32>, c: &Neuron) {
         let lr = self.lr;
-        let mut w = self.get_weight_mut(c.i, c.j as u32);
+        let w = self.get_weight_mut(c.i, c.j as u32);
         azip!((w in w, &dw in &dw) *w = *w - lr * dw);
+    }
+
+    pub fn rehash_all(&mut self) {
+        for layer in 0..(self.n_layers - 1) {
+            let shape = self.dimensions[layer + 1];
+
+            // Take ownership
+            let mut lsh = self
+                .lsh_store
+                .get_mut(layer)
+                .expect("lsh index out of bounds")
+                .take()
+                .unwrap();
+
+            (0..shape).for_each(|j| {
+                let w = self.get_weight(layer, j);
+                let w_original = self.get_weight_original(layer, j);
+                let s = w.sum();
+                let s_original = w_original.sum();
+
+                // if they differ update lsh;
+                if s != s_original {
+                    lsh.update_by_idx(
+                        j as u32,
+                        &w.as_slice().unwrap(),
+                        &w_original.as_slice().unwrap(),
+                    );
+                    self.set_pool_backup(layer, j);
+                };
+            });
+
+            // restore lsh as it was.
+            self.lsh_store[layer].replace(lsh);
+        }
     }
 }
 

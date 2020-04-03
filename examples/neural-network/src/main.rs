@@ -101,6 +101,7 @@ impl DataSet {
         let idx: Vec<usize> = (self.counter..self.counter + self.batch_size).collect();
         self.counter += self.batch_size;
         if self.counter > self.n_total {
+            self.counter = 0;
             return Err(Error::StopIter);
         }
         Ok(self.get_tpl_pairs(&idx))
@@ -129,13 +130,13 @@ fn main() {
     let mut m = Network::new(
         vec![PIXEL_OFFSET, 256, 10],
         vec![Activation::ReLU, Activation::Sigmoid],
-        1,
-        30,
+        9,
+        50,
         0.001,
         0,
     );
 
-    for epoch in 0..1 {
+    for epoch in 0..10 {
         println!("epoch {}", epoch);
         ds.shuffle();
 
@@ -150,9 +151,12 @@ fn main() {
                 r = m.forward(x);
                 loss += m.backprop(&r, &y);
             }
+            if c % 3 == 0 {
+                m.rehash_all();
+            }
 
             let output_layer = &r[r.len() - 1];
-            if output_layer.len() > 0 {
+            if output_layer.len() > 0 && c % 10 == 0 {
                 let (_, y) = xy[xy.len() - 1];
 
                 let activations: Vec<f32> = output_layer.iter().map(|c| c.a).collect();

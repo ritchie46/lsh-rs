@@ -289,6 +289,22 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
         Ok(insert_idx)
     }
 
+    pub fn update_by_idx(
+        &mut self,
+        idx: u32,
+        new_v: &DataPointSlice,
+        old_v: &DataPointSlice,
+    ) -> Result<()> {
+        let mut ht = self.hash_tables.take().unwrap();
+        for (i, proj) in self.hashers.iter().enumerate() {
+            let new_hash = proj.hash_vec_put(new_v);
+            let old_hash = proj.hash_vec_put(old_v);
+            ht.update_by_idx(&old_hash, new_hash, idx, i);
+        }
+        self.hash_tables.replace(ht);
+        Ok(())
+    }
+
     fn query_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
         self.validate_vec(v)?;
         if self._multi_probe {

@@ -5,3 +5,4 @@ Cargo.lock
 .ENV
 *.db3*
 wheels/
+data/
