@@ -3,6 +3,7 @@ use ndarray::prelude::*;
 pub enum Activation {
     ReLU,
     None,
+    Sigmoid,
 }
 
 impl Activation {
@@ -17,6 +18,7 @@ impl Activation {
                 }
             }
             None => z,
+            Sigmoid => 1. / (1. + (-z).exp()),
         }
     }
 
@@ -31,6 +33,7 @@ impl Activation {
                 }
             }
             None => 1.,
+            Sigmoid => self.activate(z) * (1. - self.activate(z)),
         }
     }
 }

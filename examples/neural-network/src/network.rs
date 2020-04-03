@@ -212,13 +212,15 @@ impl Network {
         neur
     }
 
-    pub fn backprop(&mut self, neur: &[Vec<Neuron>], y_true: &[f32]) {
+    pub fn backprop(&mut self, neur: &[Vec<Neuron>], y_true: &[u8]) -> f32 {
         // determine partial derivative and delta for output layer
 
         // iter only over the activations of the last layer
         // the loop is over all the perceptrons in one layer.
         // -2 because the of starting count from zero (-1)
         // and the input has no gradient update (-2)
+        let n_activations_last_layer = neur[self.n_layers - 2].len();
+        let mut loss = 0.;
         let mut delta;
         for c in &neur[self.n_layers - 2] {
             let layer = self.n_layers - 2;
@@ -226,10 +228,12 @@ impl Network {
 
             delta = {
                 let last_activation = &self.activations[self.activations.len() - 1];
-                Loss::MSE(last_activation).delta(y_true[c.j], c.a)
+                let y_true = y_true[c.j] as f32;
+                loss +=
+                    Loss::MSE(last_activation).loss(y_true, c.a) / n_activations_last_layer as f32;
+                Loss::MSE(last_activation).delta(y_true, c.a)
             };
             let dw = &aview1(&c.input.borrow()) * delta;
-            // TODO: update params
             self.update_param(dw, c);
 
             // Track delta neurons:
@@ -260,6 +264,7 @@ impl Network {
                 }
             }
         }
+        loss
     }
 
     fn update_param(&mut self, dw: Array1<f32>, c: &Neuron) {
@@ -272,15 +277,15 @@ impl Network {
 #[derive(Debug)]
 pub struct Neuron {
     // the ith layer in the network
-    i: usize,
+    pub i: usize,
     // the jth perceptron in the layer (same as lsh idx)
-    j: usize,
+    pub j: usize,
     // the kth layer in the memory pool
     k: usize,
     // wx + b of this perceptron
     z: f32,
     // activation of this perceptron
-    a: f32,
+    pub a: f32,
     // input x (previous a)
     input: RefCell<Vec<f32>>,
 }

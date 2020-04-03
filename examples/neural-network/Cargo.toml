@@ -12,3 +12,5 @@ blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]
 ndarray = {version = "0.13", features=["blas", "rayon"]}
 ndarray-rand = "0.11.0"
 fnv = "1.0.6"
+mnist = "0.4.0"
+rand = "0.7.3"

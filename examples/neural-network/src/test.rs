@@ -5,7 +5,7 @@ use crate::network::Network;
 fn get_model() -> Network {
     let dim = vec![2, 3, 4];
     let act = vec![Activation::ReLU, Activation::None];
-    let m = Network::new(dim, act, 3, 10, 0.01, 1);
+    let m = Network::new(dim, act, 1, 10, 0.01, 1);
     m
 }
 
@@ -24,7 +24,7 @@ fn test_flow() {
     let comp = m.forward(input);
 
     let w_before = m.get_weight(0, 0).clone();
-    let y_true = &[1., -1., 0.5, 1.];
+    let y_true = &[0, 1, 0, 0];
     m.backprop(&comp, y_true);
     let w_after = m.get_weight(0, 0).clone();
     assert![w_before[0] != w_after[0]];
