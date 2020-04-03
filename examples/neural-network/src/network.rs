@@ -1,15 +1,17 @@
 use crate::activations::Activation;
 use crate::{activations, loss::Loss};
 use fnv::FnvHashMap;
+use lsh_rs::utils::create_rng;
 use lsh_rs::{DataPoint, DataPointSlice, LshMem, SignRandomProjections};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
+use std::cell::RefCell;
 
-type Perceptron = Array1<f32>;
+type Weight = Array1<f32>;
 
 struct MemArena {
-    pool: Vec<Perceptron>,
+    pool: Vec<Weight>,
     // Freed indexes will be added to the free buffer.
     free: Vec<usize>,
 }
@@ -22,7 +24,7 @@ impl MemArena {
         }
     }
 
-    fn add(&mut self, p: Perceptron) -> usize {
+    fn add(&mut self, p: Weight) -> usize {
         match self.free.pop() {
             Some(idx) => {
                 self.pool.insert(idx, p);
@@ -35,7 +37,7 @@ impl MemArena {
         }
     }
 
-    fn get(&self, idx: &[usize]) -> Vec<&Perceptron> {
+    fn get(&self, idx: &[usize]) -> Vec<&Weight> {
         idx.iter()
             .map(|&idx| self.pool.get(idx).expect("out of bounds idx"))
             .collect()
@@ -43,7 +45,7 @@ impl MemArena {
 }
 
 pub struct Network {
-    w: Vec<Vec<u32>>,
+    pub w: Vec<Vec<u32>>,
     // biases for all layers
     lsh2bias: Vec<FnvHashMap<u32, f32>>,
     activations: Vec<Activation>,
@@ -52,6 +54,7 @@ pub struct Network {
     pool: MemArena,
     lsh2pool: Vec<FnvHashMap<u32, usize>>,
     dimensions: Vec<usize>,
+    lr: f32,
 }
 
 impl Network {
@@ -69,6 +72,8 @@ impl Network {
         activations: Vec<Activation>,
         n_projections: usize,
         n_hash_tables: usize,
+        lr: f32,
+        seed: u64,
     ) -> Self {
         let n_layers = dimensions.len();
         let mut w = Vec::with_capacity(n_layers);
@@ -76,6 +81,7 @@ impl Network {
         let mut lsh2pool = Vec::with_capacity(n_layers);
         let mut lsh2bias = Vec::with_capacity(n_layers);
         let mut lsh_store = Vec::with_capacity(n_layers);
+        let mut rng = create_rng(seed);
 
         for i in 0..(n_layers - 1) {
             let mut lsh2pool_i = FnvHashMap::default();
@@ -91,7 +97,7 @@ impl Network {
                 .unwrap();
 
             for _ in 0..out_size {
-                let p = Array1::random(in_size, StandardNormal);
+                let p = Array1::random_using(in_size, StandardNormal, &mut rng);
                 let p = p / (in_size as f32).powf(0.5);
 
                 let lsh_idx = lsh.store_vec(p.as_slice().unwrap()).unwrap();
@@ -116,16 +122,37 @@ impl Network {
             pool,
             lsh2pool,
             dimensions,
+            lr,
         }
     }
 
-    // fn get_perceptrons(&self, idx: &[u32]) -> Vec<&Perceptron> {
-    //     let pool_idx: Vec<usize> = idx
-    //         .iter()
-    //         .map(|idx| *self.lsh2pool.get(idx).expect("out of bounds idx"))
-    //         .collect();
-    //     self.pool.get(&pool_idx)
-    // }
+    fn get_pool_idx(&self, layer: usize, j: &[u32]) -> Vec<usize> {
+        j.iter()
+            .map(|idx| {
+                *self.lsh2pool[layer]
+                    .get(idx)
+                    .expect("perceptron index out of bounds")
+            })
+            .collect()
+    }
+
+    pub fn get_weight_mut(&mut self, layer: usize, j: u32) -> &mut Weight {
+        let pool_idx = self.get_pool_idx(layer, &[j])[0];
+        self.pool
+            .pool
+            .get_mut(pool_idx)
+            .expect("could not get mut perceptron")
+    }
+
+    pub fn get_weight(&mut self, layer: usize, j: usize) -> &Weight {
+        let pool_idx = self.get_pool_idx(layer, &[j as u32])[0];
+        self.pool.pool.get(pool_idx).expect("could not get weight")
+    }
+
+    pub fn get_weights(&self, layer: usize, j: &[u32]) -> Vec<&Weight> {
+        let pool_idx = self.get_pool_idx(layer, j);
+        self.pool.get(&pool_idx)
+    }
 
     fn get_biases(&self, layer: usize, idx: &[u32]) -> Vec<f32> {
         let lsh2bias = self.lsh2bias.get(layer).expect("Could not get bias layer");
@@ -134,10 +161,10 @@ impl Network {
             .collect()
     }
 
-    fn apply_layer(&self, i: usize, input: &[f32]) -> Vec<Computation> {
+    fn apply_layer(&self, i: usize, input: Vec<f32>) -> Vec<Neuron> {
         let lsh = &self.lsh_store[i];
         let activation = &self.activations[i];
-        let idx_j = lsh.query_bucket_ids(input).unwrap();
+        let idx_j = lsh.query_bucket_ids(&input).unwrap();
         let bias = self.get_biases(i, &idx_j);
 
         // index of the vectors in the pool
@@ -148,68 +175,121 @@ impl Network {
             .collect();
         let ps = self.pool.get(&k);
 
+        let input = RefCell::new(input);
+
         ps.iter()
             .zip(bias)
             .zip(idx_j)
             .zip(k)
             .map(|(((&p, b), j), k)| {
                 let j = j as usize;
-                let z = aview1(input).dot(p) + b;
+                let z = aview1(&input.borrow()).dot(p) + b;
                 let a = activation.activate(z);
-                Computation { i, j, z, a, k }
+                Neuron {
+                    i,
+                    j,
+                    z,
+                    a,
+                    k,
+                    input: input.clone(),
+                }
             })
             .collect()
     }
 
-    pub fn forward(&self, x: &[f32]) -> Vec<Vec<Computation>> {
-        let mut comp = Vec::with_capacity(self.n_layers);
+    pub fn forward(&self, x: &[f32]) -> Vec<Vec<Neuron>> {
+        let mut neur = Vec::with_capacity(self.n_layers);
 
         // first layer
-        let prev_comp = self.apply_layer(0, x);
-        comp.push(prev_comp);
+        let prev_neur = self.apply_layer(0, x.iter().copied().collect());
+        neur.push(prev_neur);
 
         for i in 1..self.n_layers - 1 {
-            let prev_comp = comp.last().unwrap();
-            let input = make_input_next_layer(prev_comp, self.dimensions[i]);
-            comp.push(self.apply_layer(i, &input))
+            let prev_neur = neur.last().unwrap();
+            let input = make_input_next_layer(prev_neur, self.dimensions[i]);
+            neur.push(self.apply_layer(i, input))
         }
-        comp
+        neur
     }
 
-    pub fn backprop(&self, comp: &[Vec<Computation>], y_true: &[f32]) {
+    pub fn backprop(&mut self, neur: &[Vec<Neuron>], y_true: &[f32]) {
         // determine partial derivative and delta for output layer
-        let last_activation = &self.activations[self.activations.len() - 1];
 
         // iter only over the activations of the last layer
         // the loop is over all the perceptrons in one layer.
-        for c in &comp[comp.len() - 1] {
-            let delta = Loss::MSE(last_activation).delta(y_true[c.i], c.a);
-            let dw = c.a * delta;
+        // -2 because the of starting count from zero (-1)
+        // and the input has no gradient update (-2)
+        let mut delta;
+        for c in &neur[self.n_layers - 2] {
+            let layer = self.n_layers - 2;
+            debug_assert!(layer == c.i);
+
+            delta = {
+                let last_activation = &self.activations[self.activations.len() - 1];
+                Loss::MSE(last_activation).delta(y_true[c.j], c.a)
+            };
+            let dw = &aview1(&c.input.borrow()) * delta;
             // TODO: update params
+            self.update_param(dw, c);
+
+            // Track delta neurons:
+            let mut prev_nodes = vec![];
+            prev_nodes.push((delta, c));
+            let mut new_prev_nodes;
 
             // Per perceptron we traverse back all the layers (except the input)
-            for i in ((self.n_layers - 1)..1).step_by(2) {}
+            for layer in (0..self.n_layers - 2).rev() {
+                for (prev_delta, prev_c) in &prev_nodes {
+                    new_prev_nodes = vec![];
+
+                    for c in &neur[layer] {
+                        debug_assert!(layer == c.i);
+
+                        // TODO: outside loop, but brchk doesn't allow it
+                        // weights layer before
+                        let w = self.get_weights(layer + 1, &[prev_c.j as u32])[0];
+                        // activation layer before
+                        let act = &self.activations[layer + 1];
+
+                        delta = prev_delta * w[c.j] * act.prime(prev_c.z);
+                        let dw = &aview1(&c.input.borrow()) * delta;
+                        self.update_param(dw, c);
+
+                        new_prev_nodes.push((delta, c));
+                    }
+                }
+            }
         }
+    }
+
+    fn update_param(&mut self, dw: Array1<f32>, c: &Neuron) {
+        let lr = self.lr;
+        let mut w = self.get_weight_mut(c.i, c.j as u32);
+        azip!((w in w, &dw in &dw) *w = *w - lr * dw);
     }
 }
 
 #[derive(Debug)]
-pub struct Computation {
+pub struct Neuron {
     // the ith layer in the network
     i: usize,
     // the jth perceptron in the layer (same as lsh idx)
     j: usize,
     // the kth layer in the memory pool
     k: usize,
+    // wx + b of this perceptron
     z: f32,
+    // activation of this perceptron
     a: f32,
+    // input x (previous a)
+    input: RefCell<Vec<f32>>,
 }
 
-fn make_input_next_layer(prev_comp: &[Computation], layer_size: usize) -> Vec<f32> {
+fn make_input_next_layer(prev_neur: &[Neuron], layer_size: usize) -> Vec<f32> {
     // The previous layer had only a few of all possible activation.
     // create a new zero filled vector where only the activations are filled.
 
     let mut layer = vec![0.; layer_size];
-    prev_comp.iter().for_each(|c| layer[c.j] = c.a);
+    prev_neur.iter().for_each(|c| layer[c.j] = c.a);
     layer
 }
