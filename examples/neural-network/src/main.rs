@@ -143,20 +143,24 @@ fn main() {
         let mut c = 0;
         while let Ok(xy) = ds.get_batch() {
             c += 1;
-            let mut r = vec![];
+            let mut neurons = vec![];
             let mut loss = 0.;
 
             // TODO: Utilize batch? Store results?
             for (x, y) in &xy {
-                let (r_, _) = m.forward(x);
-                r = r_;
-                loss += m.backprop(&mut r, &y);
+                let (r_, inputs) = m.forward(x);
+                neurons = r_;
+                loss += m.backprop(&mut neurons, &y);
+
+                for (n, input) in neurons.iter().zip(&inputs) {
+                    m.update_param(input, n)
+                }
             }
             if c % 3 == 0 {
-                m.rehash_all();
+                m.rehash();
             }
 
-            let output_layer = &r[r.len() - 1];
+            let output_layer = &neurons[neurons.len() - 1];
             if output_layer.len() > 0 && c % 10 == 0 {
                 let (_, y) = xy[xy.len() - 1];
 

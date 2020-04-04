@@ -52,9 +52,9 @@ fn test_gradients() {
     pool[4] = array![0.5, -0.2, 0.2]; // 1 + 0 + 0.2 = 1.2
 
     // get first layer
-    let (mut r, _) = m.forward(x);
-    let layer_1 = &r[0];
-    let layer_2 = &r[1];
+    let (mut neurons, inputs) = m.forward(x);
+    let layer_1 = &neurons[0];
+    let layer_2 = &neurons[1];
     for n in layer_1 {
         match n.j {
             0 => assert_eq!(n.z, 2.),
@@ -72,13 +72,13 @@ fn test_gradients() {
         }
     }
 
-    m.backprop(&mut r, &[0, 1]);
+    m.backprop(&mut neurons, &[0, 1]);
     // j     a      y    δ (y - a)
     // 0    2.5     0   2.5
     // 1    1.2     1   0.2
 
-    let layer_1 = &r[0];
-    let layer_2 = &r[1];
+    let layer_1 = &neurons[0];
+    let layer_2 = &neurons[1];
     for n in layer_2 {
         match n.j {
             0 => assert_eq!(n.delta, 2.5),
@@ -86,8 +86,7 @@ fn test_gradients() {
             _ => panic!("this neuron was not expected."),
         }
     }
-    println!("{:?}", r[1]);
-    // now follow the gradient of the 0th neuron (in both layers) δj = 2.5
+    // now follow the gradient: δj = 2.5 and 0.2
     // δ2 = δj * w2 * relu_prime (1 or 0). In this case 1, otherwise its not an interesting case
     // layer w2 = [1., 0.5, 0.5]
     // 2.5 * [1., 0.5, 0.5] * 1 =   [2.5, 1.25, 1.25]
@@ -103,5 +102,10 @@ fn test_gradients() {
             _ => panic!("this neuron was not expected."),
         }
     }
-    println!("{:?}", r[0])
+    println!("{:?}", neurons[1]);
+    println!("{:?}", neurons[0]);
+
+    for (n, input) in neurons.iter().zip(&inputs) {
+        m.update_param(input, n)
+    }
 }

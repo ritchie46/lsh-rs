@@ -266,8 +266,6 @@ impl Network {
             };
 
             c.delta = delta;
-            // let dw = &aview1(&c.input.borrow()) * delta;
-            // self.update_param(dw, c);
 
             // Track delta neurons:
             let mut prev_nodes = vec![];
@@ -279,21 +277,15 @@ impl Network {
                 for (prev_delta, prev_c) in &prev_nodes {
                     new_prev_nodes = vec![];
                     let prev_c = unsafe { &**prev_c };
+                    // weights layer before
+                    let w = self.get_weight(layer + 1, prev_c.j);
+                    // activation layer before
+                    let act = &self.activations[layer + 1];
 
                     for c in &mut prev_layers[layer] {
                         debug_assert!(layer == c.i);
-
-                        // TODO: outside loop, but brchk doesn't allow it
-                        // weights layer before
-                        let w = self.get_weight(layer + 1, prev_c.j);
-                        // activation layer before
-                        let act = &self.activations[layer + 1];
-
                         delta = prev_delta * w[c.j] * act.prime(prev_c.z);
                         c.delta += delta;
-                        // let dw = &aview1(&c.input.borrow()) * delta;
-                        // self.update_param(dw, c);
-
                         new_prev_nodes.push((delta, &*c as *const Neuron));
                     }
                 }
@@ -302,13 +294,18 @@ impl Network {
         loss
     }
 
-    fn update_param(&mut self, dw: Array1<f32>, c: &Neuron) {
+    pub fn update_param(&mut self, input: &[f32], neur: &[Neuron]) {
         let lr = self.lr;
-        let w = self.get_weight_mut(c.i, c.j as u32);
-        azip!((w in w, &dw in &dw) *w = *w - lr * dw);
+        let a = aview1(input);
+
+        neur.iter().for_each(|neuron| {
+            let dw = &a * neuron.delta;
+            let w = self.get_weight_mut(neuron.i, neuron.j as u32);
+            azip!((w in w, &dw in &dw) *w = *w - lr * dw);
+        })
     }
 
-    pub fn rehash_all(&mut self) {
+    pub fn rehash(&mut self) {
         for layer in 0..(self.n_layers - 1) {
             let shape = self.dimensions[layer + 1];
 
