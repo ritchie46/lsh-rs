@@ -217,6 +217,7 @@ impl Network {
                     a,
                     k,
                     input: input.clone(),
+                    delta: 0.,
                 }
             })
             .collect()
@@ -237,7 +238,7 @@ impl Network {
         neur
     }
 
-    pub fn backprop(&mut self, neur: &[Vec<Neuron>], y_true: &[u8]) -> f32 {
+    pub fn backprop(&mut self, neur: &mut [Vec<Neuron>], y_true: &[u8]) -> f32 {
         // determine partial derivative and delta for output layer
 
         // iter only over the activations of the last layer
@@ -247,7 +248,10 @@ impl Network {
         let n_activations_last_layer = neur[self.n_layers - 2].len();
         let mut loss = 0.;
         let mut delta;
-        for c in &neur[self.n_layers - 2] {
+        let (prev_layers, last_layer) = neur.split_at_mut(self.n_layers - 2);
+
+        debug_assert_eq!(last_layer.len(), 1);
+        for c in &mut last_layer[0] {
             let layer = self.n_layers - 2;
             debug_assert!(layer == c.i);
 
@@ -258,20 +262,23 @@ impl Network {
                     Loss::MSE(last_activation).loss(y_true, c.a) / n_activations_last_layer as f32;
                 Loss::MSE(last_activation).delta(y_true, c.a)
             };
+
+            c.delta = delta;
             let dw = &aview1(&c.input.borrow()) * delta;
-            self.update_param(dw, c);
+            // self.update_param(dw, c);
 
             // Track delta neurons:
             let mut prev_nodes = vec![];
-            prev_nodes.push((delta, c));
+            prev_nodes.push((delta, &*c as *const Neuron));
             let mut new_prev_nodes;
 
             // Per perceptron we traverse back all the layers (except the input)
             for layer in (0..self.n_layers - 2).rev() {
                 for (prev_delta, prev_c) in &prev_nodes {
                     new_prev_nodes = vec![];
+                    let prev_c = unsafe { &**prev_c };
 
-                    for c in &neur[layer] {
+                    for c in &mut prev_layers[layer] {
                         debug_assert!(layer == c.i);
 
                         // TODO: outside loop, but brchk doesn't allow it
@@ -281,10 +288,11 @@ impl Network {
                         let act = &self.activations[layer + 1];
 
                         delta = prev_delta * w[c.j] * act.prime(prev_c.z);
+                        c.delta += delta;
                         let dw = &aview1(&c.input.borrow()) * delta;
-                        self.update_param(dw, c);
+                        // self.update_param(dw, c);
 
-                        new_prev_nodes.push((delta, c));
+                        new_prev_nodes.push((delta, &*c as *const Neuron));
                     }
                 }
             }
@@ -347,6 +355,7 @@ pub struct Neuron {
     pub a: f32,
     // input x (previous a)
     input: RefCell<Vec<f32>>,
+    pub delta: f32,
 }
 
 fn make_input_next_layer(prev_neur: &[Neuron], layer_size: usize) -> Vec<f32> {

@@ -149,7 +149,7 @@ fn main() {
             // TODO: Utilize batch? Store results?
             for (x, y) in &xy {
                 r = m.forward(x);
-                loss += m.backprop(&r, &y);
+                loss += m.backprop(&mut r, &y);
             }
             if c % 3 == 0 {
                 m.rehash_all();
