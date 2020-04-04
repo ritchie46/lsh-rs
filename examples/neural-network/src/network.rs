@@ -186,7 +186,7 @@ impl Network {
             .collect()
     }
 
-    fn apply_layer(&self, i: usize, input: Vec<f32>) -> Vec<Neuron> {
+    fn apply_layer(&self, i: usize, input: &[f32]) -> Vec<Neuron> {
         let lsh = self.lsh_store[i].as_ref().unwrap();
         let activ_fn = &self.activations[i];
         let idx_j = lsh.query_bucket_ids(&input).unwrap();
@@ -216,26 +216,28 @@ impl Network {
                     z,
                     a,
                     k,
-                    input: input.clone(),
                     delta: 0.,
                 }
             })
             .collect()
     }
 
-    pub fn forward(&self, x: &[f32]) -> Vec<Vec<Neuron>> {
+    pub fn forward(&self, x: &[f32]) -> (Vec<Vec<Neuron>>, Vec<Vec<f32>>) {
         let mut neur = Vec::with_capacity(self.n_layers);
+        let mut inputs = Vec::with_capacity(self.n_layers);
 
         // first layer
-        let prev_neur = self.apply_layer(0, x.iter().copied().collect());
+        inputs.push(x.iter().copied().collect());
+        let prev_neur = self.apply_layer(0, x);
         neur.push(prev_neur);
 
         for i in 1..self.n_layers - 1 {
             let prev_neur = neur.last().unwrap();
             let input = make_input_next_layer(prev_neur, self.dimensions[i]);
-            neur.push(self.apply_layer(i, input))
+            neur.push(self.apply_layer(i, &input));
+            inputs.push(input);
         }
-        neur
+        (neur, inputs)
     }
 
     pub fn backprop(&mut self, neur: &mut [Vec<Neuron>], y_true: &[u8]) -> f32 {
@@ -264,7 +266,7 @@ impl Network {
             };
 
             c.delta = delta;
-            let dw = &aview1(&c.input.borrow()) * delta;
+            // let dw = &aview1(&c.input.borrow()) * delta;
             // self.update_param(dw, c);
 
             // Track delta neurons:
@@ -289,7 +291,7 @@ impl Network {
 
                         delta = prev_delta * w[c.j] * act.prime(prev_c.z);
                         c.delta += delta;
-                        let dw = &aview1(&c.input.borrow()) * delta;
+                        // let dw = &aview1(&c.input.borrow()) * delta;
                         // self.update_param(dw, c);
 
                         new_prev_nodes.push((delta, &*c as *const Neuron));
@@ -354,7 +356,6 @@ pub struct Neuron {
     // activation of this perceptron
     pub a: f32,
     // input x (previous a)
-    input: RefCell<Vec<f32>>,
     pub delta: f32,
 }
 

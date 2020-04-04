@@ -148,7 +148,8 @@ fn main() {
 
             // TODO: Utilize batch? Store results?
             for (x, y) in &xy {
-                r = m.forward(x);
+                let (r_, _) = m.forward(x);
+                r = r_;
                 loss += m.backprop(&mut r, &y);
             }
             if c % 3 == 0 {

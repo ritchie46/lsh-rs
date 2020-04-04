@@ -24,7 +24,7 @@ fn test_flow() {
     // check if tensors can flow
     let mut m = get_model(4);
     let input = &[0.2, -0.2];
-    let mut comp = m.forward(input);
+    let (mut comp, _) = m.forward(input);
 
     let w_before = m.get_weight(0, 0).clone();
     let y_true = &[0, 1, 0, 0];
@@ -52,7 +52,7 @@ fn test_gradients() {
     pool[4] = array![0.5, -0.2, 0.2]; // 1 + 0 + 0.2 = 1.2
 
     // get first layer
-    let mut r = m.forward(x);
+    let (mut r, _) = m.forward(x);
     let layer_1 = &r[0];
     let layer_2 = &r[1];
     for n in layer_1 {
@@ -90,7 +90,18 @@ fn test_gradients() {
     // now follow the gradient of the 0th neuron (in both layers) δj = 2.5
     // δ2 = δj * w2 * relu_prime (1 or 0). In this case 1, otherwise its not an interesting case
     // layer w2 = [1., 0.5, 0.5]
-    // 2.5 * [1., 0.5, 0.5] * 1 = [2.5, 1.25, 1.25]
+    // 2.5 * [1., 0.5, 0.5] * 1 =   [2.5, 1.25, 1.25]
     // 0.2 * [0.5, -0.2, 0.2] * 1 = [0.1, -0.04, 0.04]
+    // sum of above:                ------------------- +
+    //                              [2.6,  1.21, 1.29]
+    // jth node:                     0,     1,     2
+    for n in layer_1 {
+        match n.j {
+            0 => assert_eq!(n.delta, 2.6),
+            1 => assert_eq!(n.delta, 1.21),
+            2 => assert_eq!(n.delta, 1.29),
+            _ => panic!("this neuron was not expected."),
+        }
+    }
     println!("{:?}", r[0])
 }
