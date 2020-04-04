@@ -8,11 +8,11 @@ use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use std::cell::RefCell;
 
-type Weight = Array1<f32>;
+pub type Weight = Array1<f32>;
 
-struct MemArena {
+pub struct MemArena {
     // the weights that constantly get updated
-    pool: Vec<Weight>,
+    pub pool: Vec<Weight>,
     // the original weights. They are only updated during re-hashing
     pool_backup: Vec<Weight>,
     // Freed indexes will be added to the free buffer.
@@ -59,7 +59,7 @@ pub struct Network {
     activations: Vec<Activation>,
     lsh_store: Vec<Option<LshMem<SignRandomProjections>>>,
     n_layers: usize,
-    pool: MemArena,
+    pub pool: MemArena,
     lsh2pool: Vec<FnvHashMap<u32, usize>>,
     dimensions: Vec<usize>,
     lr: f32,
@@ -188,7 +188,7 @@ impl Network {
 
     fn apply_layer(&self, i: usize, input: Vec<f32>) -> Vec<Neuron> {
         let lsh = self.lsh_store[i].as_ref().unwrap();
-        let activation = &self.activations[i];
+        let activ_fn = &self.activations[i];
         let idx_j = lsh.query_bucket_ids(&input).unwrap();
         let bias = self.get_biases(i, &idx_j);
 
@@ -209,7 +209,7 @@ impl Network {
             .map(|(((&p, b), j), k)| {
                 let j = j as usize;
                 let z = aview1(&input.borrow()).dot(p) + b;
-                let a = activation.activate(z);
+                let a = activ_fn.activate(z);
                 Neuron {
                     i,
                     j,
@@ -342,7 +342,7 @@ pub struct Neuron {
     // the kth layer in the memory pool
     k: usize,
     // wx + b of this perceptron
-    z: f32,
+    pub z: f32,
     // activation of this perceptron
     pub a: f32,
     // input x (previous a)
