@@ -8,7 +8,7 @@ fn get_model(output_size: usize, lr: f32) -> Network {
     let act = vec![Activation::ReLU, Activation::None];
     // increase the probability of all neurons being selected by having many hash_tables
     // and the simples hash value, i.e. a bit.
-    let m = Network::new(dim, act, 1, 100, lr, 1);
+    let m = Network::new(dim, act, 1, 100, lr, 1, "mse");
     m
 }
 

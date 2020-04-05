@@ -1,13 +1,14 @@
 extern crate blas_src;
+extern crate minifb;
 extern crate mnist;
 extern crate ndarray;
-extern crate minifb;
 use minifb::{Window, WindowOptions};
 pub mod activations;
 pub mod loss;
 mod network;
 mod test;
 use crate::activations::Activation;
+use crate::loss::Loss;
 use crate::network::Network;
 use mnist::{Mnist, MnistBuilder};
 use ndarray::prelude::*;
@@ -110,24 +111,17 @@ impl DataSet {
     }
 
     fn show_image(&self, idx: usize) {
-        let mut window = Window::new(
-            "",
-            28,
-            28,
-            WindowOptions::default(),
-        ).unwrap();
+        let mut window = Window::new("", 28, 28, WindowOptions::default()).unwrap();
         let xy = self.get_tpl_pairs(&[idx])[0];
         let x: Vec<u32> = xy.0.iter().map(|&v| (v * 255.) as u32).collect();
         let y = xy.1;
         window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
         println!("{}", get_argmax(y));
 
-        while window.is_open()  {
+        while window.is_open() {
             window.update_with_buffer(&x, 28, 28).unwrap();
         }
     }
-
-
 }
 
 fn main() {
@@ -157,6 +151,7 @@ fn main() {
         100,
         0.001,
         0,
+        "nll",
     );
 
     for epoch in 0..15 {
@@ -172,7 +167,8 @@ fn main() {
             let mut loss = 0.;
 
             // TODO: Utilize batch? Store results?
-            for (x, y) in &xy {
+
+            for (i, (x, y)) in xy.iter().enumerate() {
                 let (r_, inputs) = m.forward(x);
                 neurons = r_;
                 loss += m.backprop(&mut neurons, &y);
@@ -197,7 +193,7 @@ fn main() {
                     correct += 1
                 }
                 if c % 10 == 0 {
-                    println!("{:?}", (loss, y_pred, y_true,  correct as f32 / c as f32))
+                    println!("{:?}", (loss, y_pred, y_true, correct as f32 / c as f32))
                 }
             }
         }

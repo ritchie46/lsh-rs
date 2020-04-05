@@ -2,6 +2,7 @@ use crate::activations::Activation;
 
 pub enum Loss<'a> {
     MSE(&'a Activation),
+    NLL(&'a Activation),
 }
 
 impl<'a> Loss<'a> {
@@ -9,13 +10,7 @@ impl<'a> Loss<'a> {
         use Loss::*;
         match self {
             MSE(a) => a,
-        }
-    }
-
-    pub fn activation(&self, z: f32) -> f32 {
-        use Loss::*;
-        match self {
-            MSE(a) => a.activate(z),
+            NLL(a) => a,
         }
     }
 
@@ -23,6 +18,13 @@ impl<'a> Loss<'a> {
         use Loss::*;
         match self {
             MSE(_) => (y_pred - y_true).powf(2.),
+            NLL(_) => {
+                if y_true == 1. {
+                    -y_pred.ln()
+                } else {
+                    -(1. - y_pred).ln()
+                }
+            }
         }
     }
 
@@ -30,6 +32,13 @@ impl<'a> Loss<'a> {
         use Loss::*;
         match self {
             MSE(_) => y_pred - y_true,
+            NLL(_) => {
+                if y_true == 1. {
+                    -1. / y_pred
+                } else {
+                    1. / (1. - y_pred)
+                }
+            }
         }
     }
 

@@ -63,6 +63,7 @@ pub struct Network {
     lsh2pool: Vec<FnvHashMap<u32, usize>>,
     dimensions: Vec<usize>,
     lr: f32,
+    loss: String,
 }
 
 impl Network {
@@ -82,6 +83,7 @@ impl Network {
         n_hash_tables: usize,
         lr: f32,
         seed: u64,
+        loss: &str,
     ) -> Self {
         let n_layers = dimensions.len();
         let mut w = Vec::with_capacity(n_layers);
@@ -134,6 +136,7 @@ impl Network {
             lsh2pool,
             dimensions,
             lr,
+            loss: loss.to_string(),
         }
     }
 
@@ -156,7 +159,9 @@ impl Network {
     }
 
     pub fn get_bias_mut(&mut self, layer: usize, j: usize) -> &mut f32 {
-        self.lsh2bias[layer].get_mut(&(j as u32)).expect("could not get mut bias")
+        self.lsh2bias[layer]
+            .get_mut(&(j as u32))
+            .expect("could not get mut bias")
     }
 
     pub fn get_weight(&self, layer: usize, j: usize) -> &Weight {
@@ -264,9 +269,13 @@ impl Network {
             delta = {
                 let last_activation = &self.activations[self.activations.len() - 1];
                 let y_true = y_true[c.j] as f32;
-                loss +=
-                    Loss::MSE(last_activation).loss(y_true, c.a) / n_activations_last_layer as f32;
-                Loss::MSE(last_activation).delta(y_true, c.a)
+                let loss_fn = if self.loss == "mse" {
+                    Loss::MSE(last_activation)
+                } else {
+                    Loss::NLL(last_activation)
+                };
+                loss += loss_fn.loss(y_true, c.a) / n_activations_last_layer as f32;
+                loss_fn.delta(y_true, c.a)
             };
 
             c.delta = delta;
