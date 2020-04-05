@@ -1,6 +1,8 @@
 extern crate blas_src;
 extern crate mnist;
 extern crate ndarray;
+extern crate minifb;
+use minifb::{Window, WindowOptions};
 pub mod activations;
 pub mod loss;
 mod network;
@@ -106,6 +108,26 @@ impl DataSet {
         }
         Ok(self.get_tpl_pairs(&idx))
     }
+
+    fn show_image(&self, idx: usize) {
+        let mut window = Window::new(
+            "",
+            28,
+            28,
+            WindowOptions::default(),
+        ).unwrap();
+        let xy = self.get_tpl_pairs(&[idx])[0];
+        let x: Vec<u32> = xy.0.iter().map(|&v| (v * 255.) as u32).collect();
+        let y = xy.1;
+        window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+        println!("{}", get_argmax(y));
+
+        while window.is_open()  {
+            window.update_with_buffer(&x, 28, 28).unwrap();
+        }
+    }
+
+
 }
 
 fn main() {
@@ -126,21 +148,24 @@ fn main() {
         .finalize();
 
     let mut ds = DataSet::new(trn_img, trn_lbl, 64);
+
     // Start with an LSH that collides everything. This way we can check if the model learns first.
     let mut m = Network::new(
-        vec![PIXEL_OFFSET, 256, 10],
-        vec![Activation::ReLU, Activation::Sigmoid],
+        vec![PIXEL_OFFSET, 256, 256, 10],
+        vec![Activation::ReLU, Activation::ReLU, Activation::Sigmoid],
         9,
         50,
-        0.001,
+        0.01,
         0,
     );
 
-    for epoch in 0..10 {
+    for epoch in 0..15 {
         println!("epoch {}", epoch);
         ds.shuffle();
 
         let mut c = 0;
+        let mut correct = 0;
+
         while let Ok(xy) = ds.get_batch() {
             c += 1;
             let mut neurons = vec![];
@@ -156,20 +181,24 @@ fn main() {
                     m.update_param(input, n)
                 }
             }
-            if c % 3 == 0 {
+            if c % 5 == 0 {
                 m.rehash();
             }
 
             let output_layer = &neurons[neurons.len() - 1];
-            if output_layer.len() > 0 && c % 10 == 0 {
-                let (_, y) = xy[xy.len() - 1];
 
+            if output_layer.len() > 0 {
+                let (_, y) = xy[xy.len() - 1];
                 let activations: Vec<f32> = output_layer.iter().map(|c| c.a).collect();
                 let y_pred_idx = get_argmax(&activations);
                 let y_pred = output_layer[y_pred_idx].j;
                 let y_true = get_argmax(y);
-
-                println!("{:?}", (loss, y_pred, y_true, activations))
+                if y_true == y_pred {
+                    correct += 1
+                }
+                if c % 10 == 0 {
+                    println!("{:?}", (loss, y_pred, y_true,  correct as f32 / c as f32))
+                }
             }
         }
     }
