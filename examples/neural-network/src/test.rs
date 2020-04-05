@@ -3,18 +3,18 @@ use crate::activations::Activation;
 use crate::network::Network;
 use ndarray::prelude::*;
 
-fn get_model(output_size: usize) -> Network {
+fn get_model(output_size: usize, lr: f32) -> Network {
     let dim = vec![2, 3, output_size];
     let act = vec![Activation::ReLU, Activation::None];
     // increase the probability of all neurons being selected by having many hash_tables
     // and the simples hash value, i.e. a bit.
-    let m = Network::new(dim, act, 1, 100, 0.01, 1);
+    let m = Network::new(dim, act, 1, 100, lr, 1);
     m
 }
 
 #[test]
 fn test_shapes() {
-    let m = get_model(4);
+    let m = get_model(4, 0.01);
     assert_eq!(m.w[0].len(), 3);
     assert_eq!(m.w[1].len(), 4);
 }
@@ -22,7 +22,7 @@ fn test_shapes() {
 #[test]
 fn test_flow() {
     // check if tensors can flow
-    let mut m = get_model(4);
+    let mut m = get_model(4, 0.01);
     let input = &[0.2, -0.2];
     let (mut comp, _) = m.forward(input);
 
@@ -35,7 +35,7 @@ fn test_flow() {
 
 #[test]
 fn test_gradients() {
-    let mut m = get_model(2);
+    let mut m = get_model(2, 1.);
     let pool = &mut m.pool.pool;
     // input dim = 2, hidden layer = 3
     // so the weights matrix is 2 x 3
@@ -102,10 +102,29 @@ fn test_gradients() {
             _ => panic!("this neuron was not expected."),
         }
     }
-    println!("{:?}", neurons[1]);
-    println!("{:?}", neurons[0]);
 
     for (n, input) in neurons.iter().zip(&inputs) {
         m.update_param(input, n)
     }
+    // dw = δ(n) * a(n-1)
+    //
+    // layer_2
+    // a = [2, 0, 1] (output of layer_1)
+    // neuron 0:
+    //      w = [1., 0.5, 0.5]
+    //      δ = 2.5
+    //      dw = [5, 0, 2.5]
+    //      w_updated = [-4, 0.5, -2]
+
+    let pool = &mut m.pool.pool;
+    assert_eq!(pool[3].to_vec(), vec![-4.0, 0.5, -2.0]);
+
+    // layer_1
+    // a = x = [1, -1]
+    // neuron 0:
+    //      w = [1, -1]
+    //      δ = 2.6
+    //      dw = [2.6, -2.6]
+    //      w_updated = [-1.6, 1.6]
+    assert_eq!(pool[0].to_vec(), vec![-1.5999999, 1.5999999]);
 }

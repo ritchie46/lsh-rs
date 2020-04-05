@@ -155,6 +155,10 @@ impl Network {
             .expect("could not get mut perceptron")
     }
 
+    pub fn get_bias_mut(&mut self, layer: usize, j: usize) -> &mut f32 {
+        self.lsh2bias[layer].get_mut(&(j as u32)).expect("could not get mut bias")
+    }
+
     pub fn get_weight(&self, layer: usize, j: usize) -> &Weight {
         let pool_idx = *self.lsh2pool[layer]
             .get(&(j as u32))
@@ -299,10 +303,14 @@ impl Network {
         let a = aview1(input);
 
         neur.iter().for_each(|neuron| {
-            let dw = &a * neuron.delta;
-            let w = self.get_weight_mut(neuron.i, neuron.j as u32);
-            azip!((w in w, &dw in &dw) *w = *w - lr * dw);
-        })
+            {
+                let dw = &a * neuron.delta;
+                let w = self.get_weight_mut(neuron.i, neuron.j as u32);
+                azip!((w in w, &dw in &dw) *w = *w - lr * dw);
+            }
+            let b = self.get_bias_mut(neuron.i, neuron.j);
+            *b = *b - lr * neuron.delta;
+        });
     }
 
     pub fn rehash(&mut self) {
