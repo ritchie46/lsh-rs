@@ -153,9 +153,9 @@ fn main() {
     let mut m = Network::new(
         vec![PIXEL_OFFSET, 256, 256, 10],
         vec![Activation::ReLU, Activation::ReLU, Activation::Sigmoid],
-        9,
-        50,
-        0.01,
+        1,
+        100,
+        0.001,
         0,
     );
 
