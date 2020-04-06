@@ -6,7 +6,6 @@ use lsh_rs::{DataPoint, DataPointSlice, LshMem, SignRandomProjections};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
-use std::cell::RefCell;
 
 pub type Weight = Array1<f32>;
 
@@ -209,15 +208,13 @@ impl Network {
             .collect();
         let ps = self.pool.get(&k);
 
-        let input = RefCell::new(input);
-
         ps.iter()
             .zip(bias)
             .zip(idx_j)
             .zip(k)
             .map(|(((&p, b), j), k)| {
                 let j = j as usize;
-                let z = aview1(&input.borrow()).dot(p) + b;
+                let z = aview1(&input).dot(p) + b;
                 let a = activ_fn.activate(z);
                 Neuron {
                     i,
@@ -249,7 +246,7 @@ impl Network {
         (neur, inputs)
     }
 
-    pub fn backprop(&mut self, neur: &mut [Vec<Neuron>], y_true: &[u8]) -> f32 {
+    pub fn backprop(&self, neur: &mut [Vec<Neuron>], y_true: &[u8]) -> f32 {
         // determine partial derivative and delta for output layer
 
         // iter only over the activations of the last layer

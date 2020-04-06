@@ -14,6 +14,8 @@ use mnist::{Mnist, MnistBuilder};
 use ndarray::prelude::*;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use rayon::prelude::*;
+use std::sync::Mutex;
 
 enum Error {
     StopIter,
@@ -165,18 +167,25 @@ fn main() {
 
         while let Ok(xy) = ds.get_batch() {
             c += 1;
-            let mut loss = 0.;
+            let mut loss = Mutex::new(0.);
 
-            let mut inputs_batch = Vec::with_capacity(BATCH_SIZE);
-            let mut neurons_batch = Vec::with_capacity(BATCH_SIZE);
+            let mut inputs_batch = Mutex::new(Vec::with_capacity(BATCH_SIZE));
+            let mut neurons_batch = Mutex::new(Vec::with_capacity(BATCH_SIZE));
 
-            for (i, (x, y)) in xy.iter().enumerate() {
-                let (neurons, input) = m.forward(x);
-                neurons_batch.push(neurons);
-                inputs_batch.push(input);
+            xy.par_iter().enumerate().for_each(|(i, (x, y))| {
+                let (mut neurons, input) = m.forward(x);
+                let mut neurons_lock = neurons_batch.lock().unwrap();
+                let mut inputs_lock = inputs_batch.lock().unwrap();
+                let mut loss_lock = loss.lock().unwrap();
 
-                loss += m.backprop(&mut neurons_batch[i], &y);
-            }
+                *loss_lock += m.backprop(&mut neurons, &y);
+
+                neurons_lock.push(neurons);
+                inputs_lock.push(input);
+            });
+            let neurons_batch = neurons_batch.into_inner().unwrap();
+            let inputs_batch = inputs_batch.into_inner().unwrap();
+            let loss = loss.into_inner().unwrap();
             for (input, neurons) in inputs_batch.iter().zip(&neurons_batch) {
                 for (n, input) in neurons.iter().zip(input) {
                     m.update_param(input, n)
