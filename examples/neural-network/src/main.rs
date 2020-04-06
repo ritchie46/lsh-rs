@@ -169,24 +169,21 @@ fn main() {
             c += 1;
             let mut loss = Mutex::new(0.);
 
-            let mut inputs_batch = Mutex::new(Vec::with_capacity(BATCH_SIZE));
-            let mut neurons_batch = Mutex::new(Vec::with_capacity(BATCH_SIZE));
+            let mut inputs_neurons_batch = Mutex::new(Vec::with_capacity(BATCH_SIZE));
 
             xy.par_iter().enumerate().for_each(|(i, (x, y))| {
                 let (mut neurons, input) = m.forward(x);
-                let mut neurons_lock = neurons_batch.lock().unwrap();
-                let mut inputs_lock = inputs_batch.lock().unwrap();
+                let mut lock = inputs_neurons_batch.lock().unwrap();
                 let mut loss_lock = loss.lock().unwrap();
 
                 *loss_lock += m.backprop(&mut neurons, &y);
 
-                neurons_lock.push(neurons);
-                inputs_lock.push(input);
+                lock.push((input, neurons, y));
             });
-            let neurons_batch = neurons_batch.into_inner().unwrap();
-            let inputs_batch = inputs_batch.into_inner().unwrap();
+            let inputs_neurons_batch = inputs_neurons_batch.into_inner().unwrap();
             let loss = loss.into_inner().unwrap();
-            for (input, neurons) in inputs_batch.iter().zip(&neurons_batch) {
+
+            for (input, neurons, _) in inputs_neurons_batch.iter() {
                 for (n, input) in neurons.iter().zip(input) {
                     m.update_param(input, n)
                 }
@@ -196,14 +193,14 @@ fn main() {
                 m.rehash();
             }
 
-            if neurons_batch.len() == 0 {
+            if inputs_neurons_batch.len() == 0 {
                 continue;
             }
-            let neurons = &neurons_batch[neurons_batch.len() - 1];
+            let (_, neurons, y) = &inputs_neurons_batch[inputs_neurons_batch.len() - 1];
+            // let neurons = &inputs_neurons_batch[inputs_neurons_batch.len() - 1].1;
             let output_layer = &neurons[neurons.len() - 1];
 
             if output_layer.len() > 0 {
-                let (_, y) = xy[xy.len() - 1];
                 let activations: Vec<f32> = output_layer.iter().map(|c| c.a).collect();
                 let y_pred_idx = get_argmax(&activations);
                 let y_pred = output_layer[y_pred_idx].j;
