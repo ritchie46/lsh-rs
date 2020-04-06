@@ -22,7 +22,9 @@ enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 const LABELS: usize = 10;
-const PIXEL_OFFSET: usize = 784;
+const N_PIXELS: usize = 784;
+const WIDTH: usize = 28;
+const BATCH_SIZE: usize = 64;
 
 fn one_hot_encode(idx: usize, n: usize) -> Vec<u8> {
     let mut ohe = vec![0_u8; n];
@@ -58,7 +60,7 @@ struct DataSet {
 
 impl DataSet {
     fn new(x: Vec<u8>, y: Vec<u8>, batch_size: usize) -> Self {
-        let n_total = x.len() / 784;
+        let n_total = x.len() / N_PIXELS;
         let x = x.iter().map(|&v| v as f32 / 255. - 0.5).collect();
         let idx: Vec<usize> = (0..n_total).collect();
 
@@ -86,8 +88,8 @@ impl DataSet {
         let xy: Vec<(&[f32], &[u8])> = idx
             .iter()
             .map(|&i| {
-                let x_off = i * PIXEL_OFFSET;
-                let x = &self.x[x_off..x_off + PIXEL_OFFSET];
+                let x_off = i * N_PIXELS;
+                let x = &self.x[x_off..x_off + N_PIXELS];
                 let y_off = i * LABELS;
                 let y = &self.y_ohe[y_off..y_off + LABELS];
                 (x, y)
@@ -111,7 +113,7 @@ impl DataSet {
     }
 
     fn show_image(&self, idx: usize) {
-        let mut window = Window::new("", 28, 28, WindowOptions::default()).unwrap();
+        let mut window = Window::new("", WIDTH, WIDTH, WindowOptions::default()).unwrap();
         let xy = self.get_tpl_pairs(&[idx])[0];
         let x: Vec<u32> = xy.0.iter().map(|&v| (v * 255.) as u32).collect();
         let y = xy.1;
@@ -119,13 +121,13 @@ impl DataSet {
         println!("{}", get_argmax(y));
 
         while window.is_open() {
-            window.update_with_buffer(&x, 28, 28).unwrap();
+            window.update_with_buffer(&x, WIDTH, WIDTH).unwrap();
         }
     }
 }
 
 fn main() {
-    let (trn_size, rows, cols) = (50_000, 28, 28);
+    let (trn_size, rows, cols) = (50_000, WIDTH, WIDTH);
     let mut p = std::fs::canonicalize(".").unwrap();
     p.push("data");
     println!("mnist path: {:?}", &p);
@@ -141,15 +143,15 @@ fn main() {
         .base_path(&p.to_str().unwrap())
         .finalize();
 
-    let mut ds = DataSet::new(trn_img, trn_lbl, 64);
+    let mut ds = DataSet::new(trn_img, trn_lbl, BATCH_SIZE);
 
     // Start with an LSH that collides everything. This way we can check if the model learns first.
     let mut m = Network::new(
-        vec![PIXEL_OFFSET, 256, 256, 10],
+        vec![N_PIXELS, 256, 256, 10],
         vec![Activation::ReLU, Activation::ReLU, Activation::Sigmoid],
         1,
         100,
-        0.001,
+        0.01 / BATCH_SIZE as f32,
         0,
         "nll",
     );
@@ -163,24 +165,32 @@ fn main() {
 
         while let Ok(xy) = ds.get_batch() {
             c += 1;
-            let mut neurons = vec![];
             let mut loss = 0.;
 
-            // TODO: Utilize batch? Store results?
+            let mut inputs_batch = Vec::with_capacity(BATCH_SIZE);
+            let mut neurons_batch = Vec::with_capacity(BATCH_SIZE);
 
             for (i, (x, y)) in xy.iter().enumerate() {
-                let (r_, inputs) = m.forward(x);
-                neurons = r_;
-                loss += m.backprop(&mut neurons, &y);
+                let (neurons, input) = m.forward(x);
+                neurons_batch.push(neurons);
+                inputs_batch.push(input);
 
-                for (n, input) in neurons.iter().zip(&inputs) {
+                loss += m.backprop(&mut neurons_batch[i], &y);
+            }
+            for (input, neurons) in inputs_batch.iter().zip(&neurons_batch) {
+                for (n, input) in neurons.iter().zip(input) {
                     m.update_param(input, n)
                 }
             }
+
             if c % 5 == 0 {
                 m.rehash();
             }
 
+            if neurons_batch.len() == 0 {
+                continue;
+            }
+            let neurons = &neurons_batch[neurons_batch.len() - 1];
             let output_layer = &neurons[neurons.len() - 1];
 
             if output_layer.len() > 0 {
