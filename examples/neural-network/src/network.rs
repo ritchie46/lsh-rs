@@ -61,7 +61,7 @@ pub struct Network {
     pub pool: MemArena,
     lsh2pool: Vec<FnvHashMap<u32, usize>>,
     dimensions: Vec<usize>,
-    lr: f32,
+    pub lr: f32,
     loss: String,
 }
 
@@ -194,10 +194,17 @@ impl Network {
             .collect()
     }
 
-    fn apply_layer(&self, i: usize, input: &[f32]) -> Vec<Neuron> {
-        let lsh = self.lsh_store[i].as_ref().unwrap();
+    fn apply_layer(&self, i: usize, input: &[f32], last_layer: bool) -> Vec<Neuron> {
         let activ_fn = &self.activations[i];
-        let idx_j = lsh.query_bucket_ids(&input).unwrap();
+        let mut idx_j: Vec<u32> = vec![];
+        if last_layer {
+            let output_dim = self.dimensions[self.dimensions.len() - 1];
+            idx_j = (0_u32..output_dim as u32).collect()
+        } else {
+            let lsh = self.lsh_store[i].as_ref().unwrap();
+            idx_j = lsh.query_bucket_ids(&input).unwrap();
+        }
+
         let bias = self.get_biases(i, &idx_j);
 
         // index of the vectors in the pool
@@ -234,13 +241,14 @@ impl Network {
 
         // first layer
         inputs.push(x.iter().copied().collect());
-        let prev_neur = self.apply_layer(0, x);
+        let prev_neur = self.apply_layer(0, x, false);
         neur.push(prev_neur);
 
         for i in 1..self.n_layers - 1 {
             let prev_neur = neur.last().unwrap();
             let input = make_input_next_layer(prev_neur, self.dimensions[i]);
-            neur.push(self.apply_layer(i, &input));
+            let last_layer = i == (self.n_layers - 2);
+            neur.push(self.apply_layer(i, &input, last_layer));
             inputs.push(input);
         }
         (neur, inputs)

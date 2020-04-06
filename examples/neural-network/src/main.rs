@@ -147,18 +147,17 @@ fn main() {
 
     let mut ds = DataSet::new(trn_img, trn_lbl, BATCH_SIZE);
 
-    // Start with an LSH that collides everything. This way we can check if the model learns first.
     let mut m = Network::new(
-        vec![N_PIXELS, 256, 256, 10],
-        vec![Activation::ReLU, Activation::ReLU, Activation::Sigmoid],
-        1,
-        100,
+        vec![N_PIXELS, 512, 10],
+        vec![Activation::ReLU, Activation::Sigmoid],
+        8,
+        50,
         0.01 / BATCH_SIZE as f32,
         0,
         "nll",
     );
 
-    for epoch in 0..15 {
+    for epoch in 0..50 {
         println!("epoch {}", epoch);
         ds.shuffle();
 
@@ -167,21 +166,23 @@ fn main() {
 
         while let Ok(xy) = ds.get_batch() {
             c += 1;
-            let mut loss = Mutex::new(0.);
 
             let mut inputs_neurons_batch = Mutex::new(Vec::with_capacity(BATCH_SIZE));
 
-            xy.par_iter().enumerate().for_each(|(i, (x, y))| {
-                let (mut neurons, input) = m.forward(x);
-                let mut lock = inputs_neurons_batch.lock().unwrap();
-                let mut loss_lock = loss.lock().unwrap();
+            let loss: f32 = xy
+                .par_iter()
+                .enumerate()
+                .map(|(i, (x, y))| {
+                    let (mut neurons, input) = m.forward(x);
+                    let mut lock = inputs_neurons_batch.lock().unwrap();
 
-                *loss_lock += m.backprop(&mut neurons, &y);
-
-                lock.push((input, neurons, y));
-            });
+                    let loss = m.backprop(&mut neurons, &y);
+                    lock.push((input, neurons, y));
+                    loss
+                })
+                .sum::<f32>()
+                / BATCH_SIZE as f32;
             let inputs_neurons_batch = inputs_neurons_batch.into_inner().unwrap();
-            let loss = loss.into_inner().unwrap();
 
             for (input, neurons, _) in inputs_neurons_batch.iter() {
                 for (n, input) in neurons.iter().zip(input) {
@@ -208,12 +209,19 @@ fn main() {
                 if y_true == y_pred {
                     correct += 1
                 }
+                let hidden_layer = &neurons[0];
                 if c % 10 == 0 {
-                    println!("{:?}", (loss, y_pred, y_true, correct as f32 / c as f32))
+                    println!(
+                        "loss: {} y_pred {} y_true: {} accuracy: {} n_activations_hidden_layer: {}",
+                        loss,
+                        y_pred,
+                        y_true,
+                        correct as f32 / c as f32,
+                        hidden_layer.len()
+                    )
                 }
             }
         }
+        m.lr *= 0.99
     }
-
-    println!("Hello, world! {:?}", ds.get_tpl_pairs(&[1, 2])[0].1);
 }
