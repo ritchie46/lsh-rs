@@ -7,3 +7,4 @@ pub const N_TOTAL: u32 = 30000;
 pub const QUERY_L_FACT_UPPER_BOUND: usize = 3;
 // # of hashtables
 pub const L: usize = 150;
+pub const K: usize = 19;
