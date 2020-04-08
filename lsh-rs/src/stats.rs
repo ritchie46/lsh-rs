@@ -33,7 +33,7 @@ pub fn l2_ph(r: f64, c: f64) -> f64 {
 /// # Arguments
 /// * `cosine_sim` - Cosine similarity.
 pub fn srp_ph(cosine_sim: f64) -> f64 {
-    1. - cosine_sim / PI
+    1. - cosine_sim.acos() / PI
 }
 
 ///
