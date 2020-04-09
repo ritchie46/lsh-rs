@@ -102,6 +102,7 @@ mod table {
     pub mod sqlite;
     pub mod sqlite_mem;
 }
+mod constants;
 mod error;
 pub mod utils;
 pub use crate::lsh::lsh::{LshMem, LshSql, LshSqlMem, LSH};

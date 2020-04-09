@@ -1,5 +1,6 @@
 use super::general::Bucket;
 use crate::{
+    constants::DESCRIBE_MAX,
     hash::{Hash, HashPrimitive},
     DataPoint, DataPointSlice, Error, HashTables, Result, VecHash,
 };
@@ -297,7 +298,7 @@ ORDER BY name;",
         // maximum 3 tables will be used in stats
         let i = std::cmp::min(3, self.n_hash_tables);
         for table_name in &tables[..i] {
-            let stats = hash_table_stats(&table_name, 5000, &self.conn)?;
+            let stats = hash_table_stats(&table_name, DESCRIBE_MAX, &self.conn)?;
             avg.push(stats.0);
             std_dev.push(stats.1);
             min.push(stats.2);

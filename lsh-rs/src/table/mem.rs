@@ -1,4 +1,5 @@
 use crate::{
+    constants::DESCRIBE_MAX,
     hash::{Hash, HashPrimitive},
     table::general::{Bucket, HashTables},
     utils::{all_eq, increase_capacity},
@@ -143,8 +144,11 @@ impl HashTables for MemoryTable {
         let mut max_len = 0;
         let mut min_len = 1000000;
         let mut set: FnvHashSet<HashPrimitive> = FnvHashSet::default();
+        // iterator over hash tables 0..L
         for map in self.hash_tables.iter() {
-            for (k, v) in map.iter() {
+            // iterator over all hashes
+            // zip to truncate at the describe maximum
+            for ((k, v), _) in map.iter().zip(0..DESCRIBE_MAX) {
                 let len = v.len();
                 let hash_values: FnvHashSet<HashPrimitive> =
                     FnvHashSet::from_iter(k.iter().copied());
@@ -159,13 +163,22 @@ impl HashTables for MemoryTable {
             }
         }
 
-        let out = format!(
-            "Bucket lengths: max: {}, min: {}, avg: {}, hash value projections: {:?}",
-            max_len,
-            min_len,
-            lengths.iter().sum::<usize>() as f32 / lengths.len() as f32,
-            set
-        );
+        let avg = lengths.iter().sum::<usize>() as f32 / lengths.len() as f32;
+        let var = lengths
+            .iter()
+            .map(|&v| (avg - v as f32).powf(2.))
+            .sum::<f32>()
+            / lengths.len() as f32;
+        let std_dev = var.powf(0.5);
+
+        let mut out = String::from(&format!("No. of tables: {}", self.n_hash_tables));
+        out.push_str(&format!("Unique hash values:\n{:?}\n", set));
+        out.push_str("\nHash collisions:\n");
+        out.push_str(&format!("avg:\t{:?}\n", avg));
+        out.push_str(&format!("std-dev:\t{:?}\n", std_dev));
+        out.push_str(&format!("min:\t{:?}\n", min_len));
+        out.push_str(&format!("max:\t{:?}\n", max_len));
+
         Ok(out)
     }
 
