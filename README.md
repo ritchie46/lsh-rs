@@ -1,5 +1,6 @@
  # lsh-rs (Locality Sensitive Hashing)
 [![rust docs](https://docs.rs/lsh-rs/badge.svg)](https://docs.rs/lsh-rs/latest/lsh_rs/)
+[![Build Status](https://travis-ci.org/ritchie46/lsh-rs.svg?branch=master)](https://travis-ci.org/ritchie46/lsh-rs)
 
  Locality sensitive hashing can help retrieving Approximate Nearest Neighbors in sub-linear time.
 
