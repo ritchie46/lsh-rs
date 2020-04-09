@@ -35,7 +35,7 @@ impl VecStore {
     }
 }
 
-/// In memory storage of hashed vectors/ indexes.
+/// In memory backend for [LSH](struct.LSH.html).
 #[derive(Deserialize, Serialize)]
 pub struct MemoryTable {
     hash_tables: Vec<HashMap<Hash, Bucket>>,

@@ -21,15 +21,36 @@ pub type LshSqlMem<H> = LSH<SqlTableMem, H>;
 pub type LshMem<H> = LSH<MemoryTable, H>;
 
 /// Wrapper for LSH functionality.
+/// Can be initialized following the Builder pattern.
+///
+/// # Example
+///
+/// ```
+/// use lsh_rs::LshMem;
+/// let n_projections = 9;
+/// let n_hash_tables = 45;
+/// let dim = 10;
+/// let lsh = LshMem::new(n_projections, n_hash_tables, dim)
+///     .only_index()
+///     .seed(1)
+///     .srp();
+/// ```
+/// # Builder pattern methods
+/// The following methods can be used to change internal state during object initialization:
+/// * [only_index](struct.LSH.html#method.only_index)
+/// * [seed](struct.LSH.html#method.seed)
+/// * [set_database_file](struct.LSH.html#method.set_database_file)
+/// * [multi_probe](struct.LSH.html#method.multi_probe)
+/// * [increase_storage](struct.LSH.html#method.increase_storage)
 pub struct LSH<T: HashTables, H: VecHash> {
-    /// Number of hash tables. `M` in literature.
-    n_hash_tables: usize,
+    /// Number of hash tables. `L` in literature.
+    pub n_hash_tables: usize,
     /// Number of hash functions. `K` in literature.
-    n_projections: usize,
+    pub n_projections: usize,
     /// Hash functions.
-    hashers: Vec<H>,
+    pub hashers: Vec<H>,
     /// Dimensions of p and q
-    dim: usize,
+    pub dim: usize,
     /// Storage data structure
     pub hash_tables: Option<T>,
     /// seed for hash functions. If 0, randomness is seeded from the os.
@@ -202,6 +223,10 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
         self
     }
 
+    /// Increase storage of the `hash_tables` backend. This can reduce system calls.
+    ///
+    /// # Arguments
+    /// * `upper_bound` - The maximum storage capacity required.
     pub fn increase_storage(&mut self, upper_bound: usize) -> Result<&mut Self> {
         self.hash_tables
             .as_mut()
@@ -210,11 +235,22 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
         Ok(self)
     }
 
-    pub fn set_database_directory(&mut self, path: &str) -> &mut Self {
+    /// Location where the database file should be written/ can be found.
+    /// This only has effect with the `SqlTable` backend.
+    ///
+    /// # Arguments
+    /// * `path` - File path.
+    pub fn set_database_file(&mut self, path: &str) -> &mut Self {
         self._db_path = path.to_string();
         self
     }
 
+    /// Collects statistics of the buckets in the `hash_tables`.
+    /// # Statistics
+    /// * average bucket length
+    /// * minimal bucket length
+    /// * maximum bucket length
+    /// * bucket lenght standard deviation
     pub fn describe(&self) -> Result<String> {
         self.hash_tables.as_ref().unwrap().describe()
     }
@@ -289,6 +325,12 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
         Ok(insert_idx)
     }
 
+    /// Update a data point in the `hash_tables`.
+    ///
+    /// # Arguments
+    /// * `idx` - Id of the hash that needs to be updated.
+    /// * `new_v` - New data point that needs to be hashed.
+    /// * `old_v` - Old data point. Needed to remove the old hash.
     pub fn update_by_idx(
         &mut self,
         idx: u32,

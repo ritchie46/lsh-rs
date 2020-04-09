@@ -5,6 +5,7 @@
 //! For more information on the subject see:
 //! * [Introduction on LSH](http://people.csail.mit.edu/gregory/annbook/introduction.pdf)
 //! * [Section 2. describes the hash families used in this crate](https://arxiv.org/pdf/1411.3787.pdf)
+//! * [LSH and neural networks](https://www.ritchievink.com/blog/2020/04/07/sparse-neural-networks-and-hash-tables-with-locality-sensitive-hashing/)
 //!
 //! ## Hashing implementations
 //! * Signed Random Projections (Cosine similarity)
@@ -72,6 +73,14 @@
 //! ```rust
 //! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).only_index().srp();
 //! ```
+//!
+//! # Builder pattern methods
+//! The following methods can be used to change internal state during object initialization:
+//! * [only_index](struct.LSH.html#method.only_index)
+//! * [seed](struct.LSH.html#method.seed)
+//! * [set_database_file](struct.LSH.html#method.set_database_file)
+//! * [multi_probe](struct.LSH.html#method.multi_probe)
+//! * [increase_storage](struct.LSH.html#method.increase_storage)
 //!
 //! ## BLAS support
 //! Utilizing [BLAS](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) will heavily increase

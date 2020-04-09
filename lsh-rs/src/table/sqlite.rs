@@ -99,6 +99,10 @@ FROM (
     Ok(out)
 }
 
+/// Sqlite backend for [LSH](struct.LSH.html).
+///
+/// State will be save during sessions. The database is automatically
+/// loaded if [LSH](struct.LSH.html) can find the database file (defaults to `./lsh.db3`.
 pub struct SqlTable {
     n_hash_tables: usize,
     only_index_storage: bool, // for now only supported

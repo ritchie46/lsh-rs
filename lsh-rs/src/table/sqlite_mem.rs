@@ -7,6 +7,7 @@ use crate::{
 use fnv::FnvHashSet;
 use std::ops::{Deref, DerefMut};
 
+/// In memory Sqlite backend for [LSH](struct.LSH.html).
 pub struct SqlTableMem {
     sql_table: SqlTable,
 }
