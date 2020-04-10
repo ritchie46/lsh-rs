@@ -171,7 +171,7 @@ impl HashTables for MemoryTable {
             / lengths.len() as f32;
         let std_dev = var.powf(0.5);
 
-        let mut out = String::from(&format!("No. of tables: {}", self.n_hash_tables));
+        let mut out = String::from(&format!("No. of tables: {}\n", self.n_hash_tables));
         out.push_str(&format!("Unique hash values:\n{:?}\n", set));
         out.push_str("\nHash collisions:\n");
         out.push_str(&format!("avg:\t{:?}\n", avg));
