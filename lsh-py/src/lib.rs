@@ -229,12 +229,12 @@ impl LshL2 {
         dim: usize,
         r: f32,
         seed: u64,
-        db_dir: String,
+        db_path: String,
     ) -> PyResult<(Self, Base)> {
         let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
-            .set_database_directory(&db_dir)
+            .set_database_file(&db_path)
             .l2(r);
 
         let lsh = match r {
@@ -264,12 +264,12 @@ impl LshMips {
         U: f32,
         m: usize,
         seed: u64,
-        db_dir: String,
+        db_path: String,
     ) -> PyResult<(Self, Base)> {
         let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
-            .set_database_directory(&db_dir)
+            .set_database_file(&db_path)
             .mips(r, U, m);
         let lsh = match r {
             Ok(lsh) => lsh,
@@ -295,12 +295,12 @@ impl LshSrp {
         n_hash_tables: usize,
         dim: usize,
         seed: u64,
-        db_dir: String,
+        db_path: String,
     ) -> PyResult<(Self, Base)> {
         let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
-            .set_database_directory(&db_dir)
+            .set_database_file(&db_path)
             .srp();
         let lsh = match r {
             Ok(lsh) => lsh,
