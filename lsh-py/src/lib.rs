@@ -44,8 +44,8 @@ enum LshTypes {
 }
 
 macro_rules! call_lsh_types {
-    ($self:ident, $method_call:ident, $value:expr) => {
-        match &mut $self.lsh {
+    ($lsh:expr, $method_call:ident, $value:expr) => {
+        match $lsh {
             LshTypes::L2(lsh) => lsh.$method_call($value),
             LshTypes::L2Mem(lsh) => lsh.$method_call($value),
             LshTypes::Mips(lsh) => lsh.$method_call($value),
@@ -55,8 +55,8 @@ macro_rules! call_lsh_types {
         };
     };
 
-    ($self:ident, $method_call:ident) => {
-        match &mut $self.lsh {
+    ($lsh:expr, $method_call:ident) => {
+        match $lsh {
             LshTypes::L2(lsh) => lsh.$method_call(),
             LshTypes::L2Mem(lsh) => lsh.$method_call(),
             LshTypes::Mips(lsh) => lsh.$method_call(),
@@ -74,38 +74,17 @@ struct Base {
 
 impl Base {
     fn _store_vec(&mut self, v: Vec<f32>) -> IntResult<()> {
-        match &mut self.lsh {
-            LshTypes::L2(lsh) => lsh.store_vec(&v)?,
-            LshTypes::L2Mem(lsh) => lsh.store_vec(&v)?,
-            LshTypes::Mips(lsh) => lsh.store_vec(&v)?,
-            LshTypes::Srp(lsh) => lsh.store_vec(&v)?,
-            LshTypes::SrpMem(lsh) => lsh.store_vec(&v)?,
-            LshTypes::Empty => panic!("base not initialized"),
-        };
+        call_lsh_types!(&mut self.lsh, store_vec, &v)?;
         Ok(())
     }
 
     fn _store_vecs(&mut self, vs: Vec<Vec<f32>>) -> IntResult<()> {
-        match &mut self.lsh {
-            LshTypes::L2(lsh) => lsh.store_vecs(&vs)?,
-            LshTypes::L2Mem(lsh) => lsh.store_vecs(&vs)?,
-            LshTypes::Mips(lsh) => lsh.store_vecs(&vs)?,
-            LshTypes::Srp(lsh) => lsh.store_vecs(&vs)?,
-            LshTypes::SrpMem(lsh) => lsh.store_vecs(&vs)?,
-            LshTypes::Empty => panic!("base not initialized"),
-        };
+        call_lsh_types!(&mut self.lsh, store_vecs, &vs)?;
         Ok(())
     }
     fn _query_bucket_idx(&self, v: Vec<f32>) -> IntResult<Vec<u32>> {
-        let q = match &self.lsh {
-            LshTypes::L2(lsh) => lsh.query_bucket_ids(&v),
-            LshTypes::L2Mem(lsh) => lsh.query_bucket_ids(&v),
-            LshTypes::Mips(lsh) => lsh.query_bucket_ids(&v),
-            LshTypes::Srp(lsh) => lsh.query_bucket_ids(&v),
-            LshTypes::SrpMem(lsh) => lsh.query_bucket_ids(&v),
-            LshTypes::Empty => panic!("base not initialized"),
-        };
-        Ok(q?)
+        let q = call_lsh_types!(&self.lsh, query_bucket_ids, &v)?;
+        Ok(q)
     }
 
     fn _query_bucket(&self, v: Vec<f32>) -> IntResult<Vec<Vec<f32>>> {
@@ -141,26 +120,12 @@ impl Base {
     }
 
     fn _delete_vec(&mut self, v: Vec<f32>) -> IntResult<()> {
-        match &mut self.lsh {
-            LshTypes::L2(lsh) => lsh.delete_vec(&v)?,
-            LshTypes::L2Mem(lsh) => lsh.delete_vec(&v)?,
-            LshTypes::Mips(lsh) => lsh.delete_vec(&v)?,
-            LshTypes::Srp(lsh) => lsh.delete_vec(&v)?,
-            LshTypes::SrpMem(lsh) => lsh.delete_vec(&v)?,
-            LshTypes::Empty => panic!("base not initialized"),
-        };
+        call_lsh_types!(&mut self.lsh, delete_vec, &v)?;
         Ok(())
     }
 
     fn _describe(&mut self) -> IntResult<String> {
-        let s = match &mut self.lsh {
-            LshTypes::L2(lsh) => lsh.describe()?,
-            LshTypes::L2Mem(lsh) => lsh.describe()?,
-            LshTypes::Mips(lsh) => lsh.describe()?,
-            LshTypes::Srp(lsh) => lsh.describe()?,
-            LshTypes::SrpMem(lsh) => lsh.describe()?,
-            LshTypes::Empty => panic!("base not initialized"),
-        };
+        let s = call_lsh_types!(&mut self.lsh, describe)?;
         Ok(s)
     }
 
