@@ -1,4 +1,4 @@
-from .floky import LshL2, LshSrp
+from .floky import LshL2, LshSrp, LshSrpMem, LshL2Mem
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
 import numpy as np
@@ -101,9 +101,14 @@ class Base:
 
 class L2(Base):
     def __init__(
-        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3"
+        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3", in_mem=False,
     ):
-        lsh = LshL2(n_projections, n_hash_tables, dim, r, seed, db_path)
+        if in_mem:
+            lsh_builder = LshL2Mem
+        else:
+            lsh_builder = LshL2
+
+        lsh = lsh_builder(n_projections, n_hash_tables, dim, r, seed, db_path)
         self.r = r
         super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed)
 
@@ -123,8 +128,12 @@ class L2(Base):
 
 
 class CosineSim(Base):
-    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_path="./lsh.db3"):
-        lsh = LshSrp(n_projections, n_hash_tables, dim, seed, db_path)
+    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_path="./lsh.db3", in_mem=False):
+        if in_mem:
+            lsh_builder = LshSrpMem
+        else:
+            lsh_builder = LshSrp
+        lsh = lsh_builder(n_projections, n_hash_tables, dim, seed, db_path)
         super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed)
 
     def reset(self):

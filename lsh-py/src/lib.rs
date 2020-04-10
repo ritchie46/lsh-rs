@@ -29,14 +29,42 @@ fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<LshL2>()?;
     m.add_class::<LshMips>()?;
     m.add_class::<LshSrp>()?;
+    m.add_class::<LshL2Mem>()?;
+    m.add_class::<LshSrpMem>()?;
     Ok(())
 }
 
 enum LshTypes {
     L2(LshSql<L2>),
+    L2Mem(LshMem<L2>),
     Mips(LshSql<MIPS>),
     Srp(LshSql<SignRandomProjections>),
+    SrpMem(LshMem<SignRandomProjections>),
     Empty,
+}
+
+macro_rules! call_lsh_types {
+    ($self:ident, $method_call:ident, $value:expr) => {
+        match &mut $self.lsh {
+            LshTypes::L2(lsh) => lsh.$method_call($value),
+            LshTypes::L2Mem(lsh) => lsh.$method_call($value),
+            LshTypes::Mips(lsh) => lsh.$method_call($value),
+            LshTypes::Srp(lsh) => lsh.$method_call($value),
+            LshTypes::SrpMem(lsh) => lsh.$method_call($value),
+            LshTypes::Empty => panic!("base not initialized"),
+        };
+    };
+
+    ($self:ident, $method_call:ident) => {
+        match &mut $self.lsh {
+            LshTypes::L2(lsh) => lsh.$method_call(),
+            LshTypes::L2Mem(lsh) => lsh.$method_call(),
+            LshTypes::Mips(lsh) => lsh.$method_call(),
+            LshTypes::Srp(lsh) => lsh.$method_call(),
+            LshTypes::SrpMem(lsh) => lsh.$method_call(),
+            LshTypes::Empty => panic!("base not initialized"),
+        };
+    };
 }
 
 #[pyclass]
@@ -48,8 +76,10 @@ impl Base {
     fn _store_vec(&mut self, v: Vec<f32>) -> IntResult<()> {
         match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.store_vec(&v)?,
+            LshTypes::L2Mem(lsh) => lsh.store_vec(&v)?,
             LshTypes::Mips(lsh) => lsh.store_vec(&v)?,
             LshTypes::Srp(lsh) => lsh.store_vec(&v)?,
+            LshTypes::SrpMem(lsh) => lsh.store_vec(&v)?,
             LshTypes::Empty => panic!("base not initialized"),
         };
         Ok(())
@@ -58,8 +88,10 @@ impl Base {
     fn _store_vecs(&mut self, vs: Vec<Vec<f32>>) -> IntResult<()> {
         match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.store_vecs(&vs)?,
+            LshTypes::L2Mem(lsh) => lsh.store_vecs(&vs)?,
             LshTypes::Mips(lsh) => lsh.store_vecs(&vs)?,
             LshTypes::Srp(lsh) => lsh.store_vecs(&vs)?,
+            LshTypes::SrpMem(lsh) => lsh.store_vecs(&vs)?,
             LshTypes::Empty => panic!("base not initialized"),
         };
         Ok(())
@@ -67,8 +99,10 @@ impl Base {
     fn _query_bucket_idx(&self, v: Vec<f32>) -> IntResult<Vec<u32>> {
         let q = match &self.lsh {
             LshTypes::L2(lsh) => lsh.query_bucket_ids(&v),
+            LshTypes::L2Mem(lsh) => lsh.query_bucket_ids(&v),
             LshTypes::Mips(lsh) => lsh.query_bucket_ids(&v),
             LshTypes::Srp(lsh) => lsh.query_bucket_ids(&v),
+            LshTypes::SrpMem(lsh) => lsh.query_bucket_ids(&v),
             LshTypes::Empty => panic!("base not initialized"),
         };
         Ok(q?)
@@ -77,6 +111,11 @@ impl Base {
     fn _query_bucket(&self, v: Vec<f32>) -> IntResult<Vec<Vec<f32>>> {
         let q = match &self.lsh {
             LshTypes::L2(lsh) => lsh
+                .query_bucket(&v)?
+                .into_iter()
+                .map(|dp| dp.clone())
+                .collect(),
+            LshTypes::L2Mem(lsh) => lsh
                 .query_bucket(&v)?
                 .into_iter()
                 .map(|dp| dp.clone())
@@ -91,6 +130,11 @@ impl Base {
                 .into_iter()
                 .map(|dp| dp.clone())
                 .collect(),
+            LshTypes::SrpMem(lsh) => lsh
+                .query_bucket(&v)?
+                .into_iter()
+                .map(|dp| dp.clone())
+                .collect(),
             LshTypes::Empty => panic!("base not initialized"),
         };
         Ok(q)
@@ -99,8 +143,10 @@ impl Base {
     fn _delete_vec(&mut self, v: Vec<f32>) -> IntResult<()> {
         match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.delete_vec(&v)?,
+            LshTypes::L2Mem(lsh) => lsh.delete_vec(&v)?,
             LshTypes::Mips(lsh) => lsh.delete_vec(&v)?,
             LshTypes::Srp(lsh) => lsh.delete_vec(&v)?,
+            LshTypes::SrpMem(lsh) => lsh.delete_vec(&v)?,
             LshTypes::Empty => panic!("base not initialized"),
         };
         Ok(())
@@ -109,8 +155,10 @@ impl Base {
     fn _describe(&mut self) -> IntResult<String> {
         let s = match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.describe()?,
+            LshTypes::L2Mem(lsh) => lsh.describe()?,
             LshTypes::Mips(lsh) => lsh.describe()?,
             LshTypes::Srp(lsh) => lsh.describe()?,
+            LshTypes::SrpMem(lsh) => lsh.describe()?,
             LshTypes::Empty => panic!("base not initialized"),
         };
         Ok(s)
@@ -121,7 +169,7 @@ impl Base {
             LshTypes::L2(lsh) => lsh.commit()?,
             LshTypes::Mips(lsh) => lsh.commit()?,
             LshTypes::Srp(lsh) => lsh.commit()?,
-            LshTypes::Empty => panic!("base not initialized"),
+            _ => panic!("base not initialized"),
         };
         Ok(())
     }
@@ -131,7 +179,7 @@ impl Base {
             LshTypes::L2(lsh) => lsh.init_transaction()?,
             LshTypes::Mips(lsh) => lsh.init_transaction()?,
             LshTypes::Srp(lsh) => lsh.init_transaction()?,
-            LshTypes::Empty => panic!("base not initialized"),
+            _ => panic!("base not initialized"),
         };
         Ok(())
     }
@@ -141,7 +189,7 @@ impl Base {
             LshTypes::L2(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
             LshTypes::Mips(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
             LshTypes::Srp(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
-            LshTypes::Empty => panic!("base not initialized"),
+            _ => panic!("base not initialized"),
         };
         Ok(())
     }
@@ -151,7 +199,7 @@ impl Base {
             LshTypes::L2(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
             LshTypes::Mips(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
             LshTypes::Srp(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
-            LshTypes::Empty => panic!("base not initialized"),
+            _ => panic!("base not initialized"),
         };
         Ok(())
     }
@@ -251,6 +299,39 @@ impl LshL2 {
 }
 
 #[pyclass(extends=Base)]
+struct LshL2Mem {}
+
+#[pymethods]
+impl LshL2Mem {
+    #[new]
+    fn new(
+        n_projections: usize,
+        n_hash_tables: usize,
+        dim: usize,
+        r: f32,
+        seed: u64,
+        db_path: String,
+    ) -> PyResult<(Self, Base)> {
+        let r = LshMem::new(n_projections, n_hash_tables, dim)
+            .seed(seed)
+            .only_index()
+            .set_database_file(&db_path)
+            .l2(r);
+
+        let lsh = match r {
+            Ok(lsh) => lsh,
+            Err(e) => return Err(RuntimeError::py_err(format!("{}", e))),
+        };
+        Ok((
+            LshL2Mem {},
+            Base {
+                lsh: LshTypes::L2Mem(lsh),
+            },
+        ))
+    }
+}
+
+#[pyclass(extends=Base)]
 struct LshMips {}
 
 #[pymethods]
@@ -310,6 +391,37 @@ impl LshSrp {
             LshSrp {},
             Base {
                 lsh: LshTypes::Srp(lsh),
+            },
+        ))
+    }
+}
+
+#[pyclass(extends=Base)]
+struct LshSrpMem {}
+
+#[pymethods]
+impl LshSrpMem {
+    #[new]
+    fn new(
+        n_projections: usize,
+        n_hash_tables: usize,
+        dim: usize,
+        seed: u64,
+        db_path: String,
+    ) -> PyResult<(Self, Base)> {
+        let r = LshMem::new(n_projections, n_hash_tables, dim)
+            .seed(seed)
+            .only_index()
+            .set_database_file(&db_path)
+            .srp();
+        let lsh = match r {
+            Ok(lsh) => lsh,
+            Err(e) => return Err(RuntimeError::py_err(format!("{}", e))),
+        };
+        Ok((
+            LshSrpMem {},
+            Base {
+                lsh: LshTypes::SrpMem(lsh),
             },
         ))
     }
