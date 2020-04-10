@@ -271,24 +271,16 @@ impl HashTables for SqlTable {
 
     fn describe(&self) -> Result<String> {
         let mut stmt = self.conn.prepare(
-            "SELECT name FROM sqlite_master
-WHERE type='table'
-ORDER BY name;",
+            "SELECT count(*) FROM sqlite_master
+WHERE type='table' AND WHERE type LIKE %hash%;",
         )?;
 
-        let mut rows = stmt.query(NO_PARAMS)?;
+        let row: String = stmt.query_row(NO_PARAMS, |row| {
+            let i: i64 = row.get_unwrap(0);
+            Ok(i.to_string())
+        })?;
+        let mut out = String::from(format!("No. of tables: {}\n", row));
 
-        let mut out = String::from("Tables in sqlite backend:\n");
-
-        while let Ok(r) = rows.next() {
-            match r {
-                Some(r) => {
-                    let v: String = r.get_unwrap(0);
-                    out.push_str(&format!("\t{:?}\n", v))
-                }
-                None => break,
-            }
-        }
         out.push_str("Unique hash values:\n");
         let hv = get_unique_hash_int(self.n_hash_tables, &self.conn).unwrap();
         out.push_str(&format!("{:?}", hv));
