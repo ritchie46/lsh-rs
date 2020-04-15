@@ -159,11 +159,11 @@ impl Base {
         Ok(())
     }
 
-    fn _to_mem(&mut self, pages_per_step: usize) -> IntResult<()> {
+    fn _to_mem(&mut self) -> IntResult<()> {
         match &mut self.lsh {
-            LshTypes::L2(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
-            LshTypes::Mips(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
-            LshTypes::Srp(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem(pages_per_step)?,
+            LshTypes::L2(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem()?,
+            LshTypes::Mips(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem()?,
+            LshTypes::Srp(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem()?,
             _ => panic!("base not initialized"),
         };
         Ok(())
@@ -224,8 +224,8 @@ impl Base {
         Ok(())
     }
 
-    fn to_mem(&mut self, pages_per_step: usize) -> PyResult<()> {
-        self._to_mem(pages_per_step)?;
+    fn to_mem(&mut self) -> PyResult<()> {
+        self._to_mem()?;
         Ok(())
     }
 }
