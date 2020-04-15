@@ -72,6 +72,7 @@ class Base:
     def fit(self, X, chunk_size=250):
         self.reset()
         self.data = X
+        self.lsh.increase_storage(len(X))
         self.store_vecs(X, chunk_size)
 
     def _predict(self, x, distance_f, bound):

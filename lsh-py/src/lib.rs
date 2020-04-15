@@ -44,13 +44,13 @@ enum LshTypes {
 }
 
 macro_rules! call_lsh_types {
-    ($lsh:expr, $method_call:ident, $value:expr) => {
+    ($lsh:expr, $method_call:ident, $value:expr, $($optional:tt),*) => {
         match $lsh {
-            LshTypes::L2(lsh) => lsh.$method_call($value),
-            LshTypes::L2Mem(lsh) => lsh.$method_call($value),
-            LshTypes::Mips(lsh) => lsh.$method_call($value),
-            LshTypes::Srp(lsh) => lsh.$method_call($value),
-            LshTypes::SrpMem(lsh) => lsh.$method_call($value),
+            LshTypes::L2(lsh) => {lsh.$method_call($value) $($optional),*},
+            LshTypes::L2Mem(lsh) => {lsh.$method_call($value)$($optional),*},
+            LshTypes::Mips(lsh) => {lsh.$method_call($value)$($optional),*},
+            LshTypes::Srp(lsh) => {lsh.$method_call($value)$($optional),*},
+            LshTypes::SrpMem(lsh) => {lsh.$method_call($value)$($optional),*},
             LshTypes::Empty => panic!("base not initialized"),
         };
     };
@@ -74,17 +74,22 @@ struct Base {
 
 impl Base {
     fn _store_vec(&mut self, v: Vec<f32>) -> IntResult<()> {
-        call_lsh_types!(&mut self.lsh, store_vec, &v)?;
+        call_lsh_types!(&mut self.lsh, store_vec, &v,)?;
         Ok(())
     }
 
     fn _store_vecs(&mut self, vs: Vec<Vec<f32>>) -> IntResult<()> {
-        call_lsh_types!(&mut self.lsh, store_vecs, &vs)?;
+        call_lsh_types!(&mut self.lsh, store_vecs, &vs,)?;
         Ok(())
     }
     fn _query_bucket_idx(&self, v: Vec<f32>) -> IntResult<Vec<u32>> {
-        let q = call_lsh_types!(&self.lsh, query_bucket_ids, &v)?;
+        let q = call_lsh_types!(&self.lsh, query_bucket_ids, &v,)?;
         Ok(q)
+    }
+
+    fn _increase_storage(&mut self, upper_bound: usize) -> IntResult<()> {
+        call_lsh_types!(&mut self.lsh, increase_storage, upper_bound, ;);
+        Ok(())
     }
 
     fn _query_batch(&self, vs: Vec<Vec<f32>>) -> IntResult<Vec<Vec<u32>>> {
@@ -137,7 +142,7 @@ impl Base {
     }
 
     fn _delete_vec(&mut self, v: Vec<f32>) -> IntResult<()> {
-        call_lsh_types!(&mut self.lsh, delete_vec, &v)?;
+        call_lsh_types!(&mut self.lsh, delete_vec, &v,)?;
         Ok(())
     }
 
@@ -250,6 +255,11 @@ impl Base {
 
     fn to_mem(&mut self) -> PyResult<()> {
         self._to_mem()?;
+        Ok(())
+    }
+
+    fn increase_storage(&mut self, upper_bound: usize) -> PyResult<()> {
+        self._increase_storage(upper_bound)?;
         Ok(())
     }
 }
