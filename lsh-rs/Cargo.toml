@@ -13,6 +13,7 @@ readme = "../README.md"
 # also add blas in ndarray. See Cargo.toml of bench for that.
 blas = ["blas-src", "ndarray/blas"]
 stats = ["statrs", "rayon"]
+par-query = ["rayon"]
 
 [dependencies]
 ndarray = {version = "0.13", features=["serde"]}

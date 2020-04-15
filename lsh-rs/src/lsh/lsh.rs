@@ -9,6 +9,7 @@ use crate::{DataPoint, DataPointSlice, SqlTable};
 use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
+use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -161,7 +162,22 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
+#[cfg(feature = "par-query")]
+impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
+    /// Query bucket collision for a batch of data points in parallel.
+    ///
+    /// Needs `par-query` feature.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    pub fn query_bucket_ids_batch_par(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
+        vs.into_par_iter()
+            .map(|v| self.query_bucket_ids(v))
+            .collect()
+    }
+}
+
+impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -391,6 +407,14 @@ impl<H: VecHash + Send + Sync + Clone, T: HashTables> LSH<T, H> {
         self.validate_vec(v)?;
         let bucket_union = self.query_bucket_union(v)?;
         Ok(bucket_union.iter().copied().collect())
+    }
+
+    /// Query bucket collision for a batch of data points.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    pub fn query_bucket_ids_batch(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
+        vs.iter().map(|v| self.query_bucket_ids(v)).collect()
     }
 
     /// Delete data point from storage. This does not free memory as the storage vector isn't resized.

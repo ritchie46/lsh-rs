@@ -399,7 +399,7 @@ mod test {
             sql.put(hash.clone(), &v, 0);
         }
         sql.commit();
-        let p ="./delete.db3";
+        let p = "./delete.db3";
         sql.to_db(p).unwrap();
 
         let mut sql = SqlTable::new(1, true, p).unwrap();
