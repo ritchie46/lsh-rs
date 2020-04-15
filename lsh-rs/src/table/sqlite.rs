@@ -107,9 +107,9 @@ pub struct SqlTable {
     n_hash_tables: usize,
     only_index_storage: bool, // for now only supported
     counter: u32,
-    conn: Connection,
+    pub conn: Connection,
     table_names: Vec<String>,
-    committed: Cell<bool>,
+    pub committed: Cell<bool>,
 }
 
 fn fmt_table_name(hash_table: usize) -> String {
@@ -204,11 +204,11 @@ impl SqlTable {
         Ok(())
     }
 
-    pub fn to_mem(&mut self, pages_per_step: usize) -> Result<()> {
+    pub fn to_mem(&mut self) -> Result<()> {
         let mut new_con = rusqlite::Connection::open_in_memory()?;
         {
             let backup = rusqlite::backup::Backup::new(&self.conn, &mut new_con)?;
-            backup.run_to_completion(pages_per_step as c_int, Duration::from_nanos(0), None)?;
+            backup.step(-1)?;
         }
         self.conn = new_con;
         self.committed.set(true);
@@ -389,5 +389,22 @@ mod test {
             let hash_back: &[i32] = blob_to_vec(blob);
             assert_eq!(hash, hash_back)
         }
+    }
+
+    #[test]
+    fn test_in_mem_to_disk() {
+        let mut sql = *SqlTableMem::new(1, true, ".").unwrap();
+        let v = vec![1., 2.];
+        for hash in &[vec![1, 2], vec![2, 3]] {
+            sql.put(hash.clone(), &v, 0);
+        }
+        sql.commit();
+        let p ="./delete.db3";
+        sql.to_db(p).unwrap();
+
+        let mut sql = SqlTable::new(1, true, p).unwrap();
+        sql.to_mem().unwrap();
+        assert_eq!(sql.query_bucket(&vec![1, 2], 0).unwrap().take(&0), Some(0));
+        std::fs::remove_file(p).unwrap();
     }
 }

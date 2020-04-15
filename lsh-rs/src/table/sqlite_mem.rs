@@ -6,10 +6,24 @@ use crate::{
 };
 use fnv::FnvHashSet;
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 /// In memory Sqlite backend for [LSH](struct.LSH.html).
 pub struct SqlTableMem {
     sql_table: SqlTable,
+}
+
+impl SqlTableMem {
+    pub fn to_db<P: AsRef<Path>>(&mut self, db_path: P) -> Result<()> {
+        let mut new_con = rusqlite::Connection::open(db_path)?;
+        {
+            let backup = rusqlite::backup::Backup::new(&self.conn, &mut new_con)?;
+            backup.step(-1)?;
+        }
+        self.conn = new_con;
+        self.committed.set(true);
+        Ok(())
+    }
 }
 
 impl Deref for SqlTableMem {
