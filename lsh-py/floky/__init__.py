@@ -10,7 +10,7 @@ QueryResult = namedtuple("QueryResult", ["index", "vectors", "n_collisions", "di
 
 
 class Base:
-    def __init__(self, lsh, n_projections, n_hash_tables, dim, db_path, seed):
+    def __init__(self, lsh, n_projections, n_hash_tables, dim, db_path, seed, in_mem, log):
         self.n_projection = n_projections
         self.n_hash_tables = n_hash_tables
         self.dim = dim
@@ -18,6 +18,8 @@ class Base:
         self.seed = seed
         self.db_path = db_path
         self.data = None
+        self.in_mem = in_mem
+        self.log = log
 
     def describe(self):
         print(self.lsh.describe())
@@ -30,17 +32,20 @@ class Base:
         i = chunk_size
         prev_i = 0
 
-        with tqdm(total=length) as pbar:
-            while i < length:
+        with tqdm(total=length, disable= not self.log) as pbar:
+            while prev_i < length:
                 self.lsh.store_vecs(vs[prev_i:i])
                 prev_i = i
                 i += chunk_size
                 pbar.update(chunk_size)
-                self.commit()
-                self.init_transaction()
-        self.commit()
-        print("start indexing...")
-        self.index()
+                if not self.in_mem:
+                    self.commit()
+                    self.init_transaction()
+        if not self.in_mem:
+            self.commit()
+            if self.log:
+                print("start indexing...")
+            self.index()
 
     def query_bucket(self, v):
         return self.lsh.query_bucket(v)
@@ -55,7 +60,8 @@ class Base:
         self.lsh.commit()
 
     def init_transaction(self):
-        self.lsh.init_transaction()
+        if not self.in_mem:
+            self.lsh.init_transaction()
 
     def index(self):
         self.lsh.index()
@@ -69,6 +75,8 @@ class Base:
         self.store_vecs(X, chunk_size)
 
     def _predict(self, x, distance_f, bound):
+        if self.data is None:
+            raise ValueError("data attribute is not set")
         idx = np.array(self.query_bucket_idx(x))
         n_collisions = len(idx)
 
@@ -80,7 +88,7 @@ class Base:
             b_idx = idx[i: j]
             i = j
             j += step
-            dist = cdist(x[None, :], self.data[b_idx], metric=distance_f)
+            dist = cdist(x[None, :], self.data[b_idx], metric=distance_f).flatten()
 
             mask = dist < 1
             if mask.sum() > 0:
@@ -93,28 +101,30 @@ class Base:
         return QueryResult(idx, self.data[idx], n_collisions, distances)
 
     def clean(self):
-        os.remove(self.db_path)
+        if not self.in_mem:
+            os.remove(self.db_path)
 
     def to_mem(self, pages_per_step=100):
-        self.lsh.to_mem(pages_per_step)
+        if not self.in_mem:
+            self.lsh.to_mem(pages_per_step)
 
 
 class L2(Base):
     def __init__(
-        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3", in_mem=False,
+        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3", in_mem=False, log=True
     ):
         if in_mem:
-            lsh_builder = LshL2Mem
+            self.lsh_builder = LshL2Mem
         else:
-            lsh_builder = LshL2
+            self.lsh_builder = LshL2
 
-        lsh = lsh_builder(n_projections, n_hash_tables, dim, r, seed, db_path)
+        lsh = self.lsh_builder(n_projections, n_hash_tables, dim, r, seed, db_path)
         self.r = r
-        super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed)
+        super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed, in_mem, log)
 
     def reset(self):
         self.clean()
-        self.lsh = LshL2(
+        self.lsh = self.lsh_builder(
             self.n_projection,
             self.n_hash_tables,
             self.dim,
@@ -128,17 +138,17 @@ class L2(Base):
 
 
 class CosineSim(Base):
-    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_path="./lsh.db3", in_mem=False):
+    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_path="./lsh.db3", in_mem=False, log=True):
         if in_mem:
-            lsh_builder = LshSrpMem
+            self.lsh_builder = LshSrpMem
         else:
-            lsh_builder = LshSrp
-        lsh = lsh_builder(n_projections, n_hash_tables, dim, seed, db_path)
-        super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed)
+            self.lsh_builder = LshSrp
+        lsh = self.lsh_builder(n_projections, n_hash_tables, dim, seed, db_path)
+        super().__init__(lsh, n_projections, n_hash_tables, dim, db_path, seed, in_mem, log)
 
     def reset(self):
         self.clean()
-        self.lsh = LshSrp(
+        self.lsh = self.lsh_builder(
             self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed
         )
 
