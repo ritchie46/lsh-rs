@@ -87,6 +87,23 @@ impl Base {
         Ok(q)
     }
 
+    fn _query_batch(&self, vs: Vec<Vec<f32>>) -> IntResult<Vec<Vec<u32>>> {
+        let gil_guard = Python::acquire_gil();
+        let py = gil_guard.python();
+        // allow threads doesn't make a difference on the rust side. But allows other python
+        // code to run.
+        // https://github.com/PyO3/pyo3/issues/649#issuecomment-546656381
+        let q = match &self.lsh {
+            LshTypes::L2(lsh) => lsh.query_bucket_ids_batch(&vs),
+            LshTypes::L2Mem(lsh) => py.allow_threads(move || lsh.query_bucket_ids_batch_par(&vs)),
+            LshTypes::Mips(lsh) => lsh.query_bucket_ids_batch(&vs),
+            LshTypes::Srp(lsh) => lsh.query_bucket_ids_batch(&vs),
+            LshTypes::SrpMem(lsh) => py.allow_threads(move || lsh.query_bucket_ids_batch_par(&vs)),
+            _ => panic!("base not initialized"),
+        }?;
+        Ok(q)
+    }
+
     fn _query_bucket(&self, v: Vec<f32>) -> IntResult<Vec<Vec<f32>>> {
         let q = match &self.lsh {
             LshTypes::L2(lsh) => lsh
@@ -185,7 +202,9 @@ impl Base {
     }
 
     fn store_vecs(&mut self, vs: Vec<Vec<f32>>) -> PyResult<()> {
-        self._store_vecs(vs)?;
+        let gil_guard = Python::acquire_gil();
+        let py = gil_guard.python();
+        py.allow_threads(move || self._store_vecs(vs))?;
         Ok(())
     }
 
@@ -196,6 +215,11 @@ impl Base {
 
     fn query_bucket_idx(&self, v: Vec<f32>) -> PyResult<Vec<u32>> {
         let q = self._query_bucket_idx(v)?;
+        Ok(q)
+    }
+
+    fn query_bucket_idx_batch(&self, vs: Vec<Vec<f32>>) -> PyResult<Vec<Vec<u32>>> {
+        let q = self._query_batch(vs)?;
         Ok(q)
     }
 

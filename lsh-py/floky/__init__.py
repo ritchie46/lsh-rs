@@ -77,28 +77,43 @@ class Base:
     def _predict(self, x, distance_f, bound):
         if self.data is None:
             raise ValueError("data attribute is not set")
-        idx = np.array(self.query_bucket_idx(x))
-        n_collisions = len(idx)
+        if not isinstance(x, (list, np.ndarray)):
+            raise ValueError("x is not an array")
+        X = np.array(x)
+        if len(x.shape) == 1:
+            X = np.array([x])
+        elif len(x.shape) != 2:
+            raise ValueError("x should be a 2d array")
 
-        step = bound * self.n_hash_tables
-        i = 0
-        j = step
+        qrs = []
+        for idx, x in zip(self.lsh.query_bucket_idx_batch(X), X):
+            idx = np.array(idx)
+            if len(idx) == 0:
+                qrs.append(None)
+                continue
 
-        while i < n_collisions:
-            b_idx = idx[i: j]
-            i = j
-            j += step
-            dist = cdist(x[None, :], self.data[b_idx], metric=distance_f).flatten()
+            n_collisions = len(idx)
 
-            mask = dist < 1
-            if mask.sum() > 0:
-                break
-        dist = dist[mask]
-        sorted_idx = dist.argsort()
-        idx = b_idx[mask][sorted_idx]
-        distances = dist[sorted_idx]
+            step = bound * self.n_hash_tables
+            i = 0
+            j = step
 
-        return QueryResult(idx, self.data[idx], n_collisions, distances)
+            while i < n_collisions:
+                b_idx = idx[i: j]
+                i = j
+                j += step
+                dist = cdist(x[None, :], self.data[b_idx], metric=distance_f).flatten()
+
+                mask = dist < 1
+                if mask.sum() > 0:
+                    break
+            dist = dist[mask]
+            sorted_idx = dist.argsort()
+            idx = b_idx[mask][sorted_idx]
+            distances = dist[sorted_idx]
+            qrs.append(QueryResult(idx, self.data[idx], n_collisions, distances))
+
+        return qrs
 
     def clean(self):
         if not self.in_mem:
