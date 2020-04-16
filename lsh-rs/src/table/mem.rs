@@ -116,7 +116,7 @@ impl HashTables for MemoryTable {
         idx: u32,
         hash_table: usize,
     ) -> Result<()> {
-        self.remove_idx(idx, old_hash, hash_table);
+        self.remove_idx(idx, old_hash, hash_table)?;
         self.insert_idx(idx, new_hash, hash_table);
         Ok(())
     }

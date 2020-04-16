@@ -1,4 +1,3 @@
-use ndarray::ArrayView1;
 use num::Zero;
 use rand::rngs::SmallRng;
 use rand::{thread_rng, Rng, SeedableRng};
@@ -10,10 +9,6 @@ pub fn increase_capacity<T>(size: usize, container: &mut Vec<T>) {
         let diff = size - container.capacity();
         container.reserve(diff)
     }
-}
-
-pub fn l2_norm(x: ArrayView1<f32>) -> f32 {
-    x.dot(&x).sqrt()
 }
 
 pub fn create_rng(seed: u64) -> SmallRng {

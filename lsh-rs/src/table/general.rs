@@ -36,18 +36,18 @@ pub trait HashTables {
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket>;
 
-    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint> {
+    fn idx_to_datapoint(&self, _idx: u32) -> Result<&DataPoint> {
         Err(Error::NotImplemented)
     }
 
-    fn increase_storage(&mut self, size: usize) {}
+    fn increase_storage(&mut self, _size: usize) {}
 
     fn describe(&self) -> Result<String> {
         Err(Error::NotImplemented)
     }
 
     // Should fail if hashers already stored.
-    fn store_hashers<H: VecHash + Serialize>(&mut self, hashers: &[H]) -> Result<()> {
+    fn store_hashers<H: VecHash + Serialize>(&mut self, _hashers: &[H]) -> Result<()> {
         Ok(())
     }
 

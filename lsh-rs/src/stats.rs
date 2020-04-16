@@ -1,8 +1,5 @@
 #![cfg(feature = "stats")]
-use crate::{
-    hash::HashPrimitive, utils::l2_norm, DataPoint, HashTables, LshMem, LshSqlMem, MemoryTable,
-    Result, VecHash,
-};
+use crate::{dist::l2_norm, hash::HashPrimitive, DataPoint, HashTables, LshMem, Result, VecHash};
 use fnv::FnvHashSet;
 use ndarray::aview1;
 use rayon::prelude::*;
@@ -11,8 +8,7 @@ use statrs::{
     distribution::{Normal, Univariate},
 };
 use std::f64::consts::PI;
-use std::io::Write;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Hash collision probability for L2 distance.
 ///
@@ -66,7 +62,7 @@ fn lsh_to_result<T: VecHash + Send + Sync + Clone>(
     l: usize,
 ) -> Result<OptRes> {
     let mut lsh = lsh;
-    lsh.store_vecs(vs);
+    lsh.store_vecs(vs)?;
     let mut search_time = 0.;
     let mut hash_time = 0.;
     let mut bucket_lengths = Vec::with_capacity(vs.len());
@@ -127,7 +123,7 @@ pub fn optimize_srp_params(
     let result = params
         .par_iter()
         .map(|&(k, l)| {
-            let mut lsh = LshMem::new(k, l, dim).srp()?;
+            let lsh = LshMem::new(k, l, dim).srp()?;
             lsh_to_result(lsh, vs, k, l)
         })
         .collect();
@@ -158,7 +154,7 @@ pub fn optimize_l2_params(
     let result = params
         .par_iter()
         .map(|&(r, k, l)| {
-            let mut lsh = LshMem::new(k, l, dim).l2(r as f32)?;
+            let lsh = LshMem::new(k, l, dim).l2(r as f32)?;
             lsh_to_result(lsh, vs, k, l)
         })
         .collect();

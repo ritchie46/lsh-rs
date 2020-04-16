@@ -1,4 +1,3 @@
-use serde::Serialize;
 use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]

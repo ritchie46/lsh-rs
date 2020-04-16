@@ -104,6 +104,7 @@ mod lsh {
     pub mod lsh;
     mod test;
 }
+mod dist;
 mod multi_probe;
 mod table {
     pub mod general;

@@ -2,17 +2,13 @@ use super::general::Bucket;
 use crate::{
     constants::DESCRIBE_MAX,
     hash::{Hash, HashPrimitive},
-    DataPoint, DataPointSlice, Error, HashTables, Result, VecHash,
+    DataPointSlice, Error, HashTables, Result, VecHash,
 };
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, NO_PARAMS};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::cell::Cell;
-use std::io::Write;
-use std::mem;
-use std::os::raw::c_int;
-use std::time::Duration;
 
 fn vec_to_blob<T>(hash: &[T]) -> &[u8] {
     let data = hash.as_ptr() as *const u8;
@@ -271,8 +267,8 @@ impl HashTables for SqlTable {
 
     fn describe(&self) -> Result<String> {
         let mut stmt = self.conn.prepare(
-            "SELECT count(*) FROM sqlite_master
-WHERE type='table' AND WHERE type LIKE %hash%;",
+            r#"SELECT count(*) FROM sqlite_master
+WHERE type='table' AND type LIKE '%hash%';"#,
         )?;
 
         let row: String = stmt.query_row(NO_PARAMS, |row| {
@@ -355,7 +351,7 @@ mod test {
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
             .expect("query failed");
-        let r = stmt.query(NO_PARAMS).expect("query failed");
+        stmt.query(NO_PARAMS).expect("query failed");
     }
 
     #[test]
@@ -363,11 +359,11 @@ mod test {
         let mut sql = *SqlTableMem::new(1, true, ".").unwrap();
         let v = vec![1., 2.];
         for hash in &[vec![1, 2], vec![2, 3]] {
-            sql.put(hash.clone(), &v, 0);
+            sql.put(hash.clone(), &v, 0).unwrap();
         }
         // make one hash collision by repeating one hash
         let hash = vec![1, 2];
-        sql.put(hash.clone(), &v, 0);
+        sql.put(hash.clone(), &v, 0).unwrap();
         let bucket = sql.query_bucket(&hash, 0);
         println!("{:?}", &bucket);
         match bucket {
@@ -396,9 +392,9 @@ mod test {
         let mut sql = *SqlTableMem::new(1, true, ".").unwrap();
         let v = vec![1., 2.];
         for hash in &[vec![1, 2], vec![2, 3]] {
-            sql.put(hash.clone(), &v, 0);
+            sql.put(hash.clone(), &v, 0).unwrap();
         }
-        sql.commit();
+        sql.commit().unwrap();
         let p = "./delete.db3";
         sql.to_db(p).unwrap();
 

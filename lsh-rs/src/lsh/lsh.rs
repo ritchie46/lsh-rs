@@ -9,13 +9,13 @@ use crate::{DataPoint, DataPointSlice, SqlTable};
 use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
+#[cfg(feature = "par-query")]
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{mpsc, Mutex};
 
 pub type LshSql<H> = LSH<SqlTable, H>;
 pub type LshSqlMem<H> = LSH<SqlTableMem, H>;
@@ -330,7 +330,8 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
                 });
                 drop(tx)
             });
-        });
+        })
+        .expect("something went wrong in the thread that prepares the hashes.");
 
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
@@ -357,7 +358,7 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
         for (i, proj) in self.hashers.iter().enumerate() {
             let new_hash = proj.hash_vec_put(new_v);
             let old_hash = proj.hash_vec_put(old_v);
-            ht.update_by_idx(&old_hash, new_hash, idx, i);
+            ht.update_by_idx(&old_hash, new_hash, idx, i)?;
         }
         self.hash_tables.replace(ht);
         Ok(())
@@ -470,7 +471,7 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
         for (i, proj) in self.hashers.iter().enumerate() {
             // fist process the original query
             let original_hash = proj.hash_vec_query(v);
-            self.process_bucket_union_result(&original_hash, i, &mut bucket_union);
+            self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
 
             for pertub in &probing_seq {
                 let hash = original_hash
@@ -478,7 +479,7 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
                     .zip(pertub)
                     .map(|(&a, &b)| a + b)
                     .collect();
-                self.process_bucket_union_result(&hash, i, &mut bucket_union);
+                self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
             }
         }
         Ok(bucket_union)

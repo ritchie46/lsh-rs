@@ -1,4 +1,4 @@
-use crate::utils::{create_rng, l2_norm};
+use crate::{dist::l2_norm, utils::create_rng};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
