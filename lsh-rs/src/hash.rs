@@ -123,8 +123,7 @@ impl MIPS {
     pub fn fit(&mut self, v: &[f32]) {
         let mut max_l2 = 0.;
         for x in v.chunks(self.dim) {
-            let a = aview1(x);
-            let l2 = l2_norm(a);
+            let l2 = l2_norm(x);
             if l2 > max_l2 {
                 max_l2 = l2
             }
@@ -144,7 +143,7 @@ impl MIPS {
             x_new.push(x_i / self.M * self.U)
         }
 
-        let norm_sq = l2_norm(aview1(&x_new)).powf(2.);
+        let norm_sq = l2_norm(&x_new).powf(2.);
         for i in 1..(self.m + 1) {
             x_new.push(norm_sq.powf(i as f32))
         }
@@ -155,7 +154,7 @@ impl MIPS {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
         // normalize query to have l2 == 1.
-        let l2 = l2_norm(aview1(x));
+        let l2 = l2_norm(x);
         for x_i in x {
             x_new.push(x_i / l2)
         }

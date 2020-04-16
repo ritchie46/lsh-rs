@@ -1,8 +1,6 @@
-use num::Zero;
 use rand::rngs::SmallRng;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_distr::StandardNormal;
-use std::ops::{Add, Mul};
 
 pub fn increase_capacity<T>(size: usize, container: &mut Vec<T>) {
     if container.capacity() < size {
@@ -27,18 +25,6 @@ pub fn rand_unit_vec<RNG: Rng>(size: usize, rng: RNG) -> Vec<f32> {
     rng.sample_iter(StandardNormal).take(size).collect()
 }
 
-/// TODO: Use blas implemented dot product.
-pub fn dot_prod<T>(u: &[T], v: &[T]) -> T
-where
-    T: Add<T, Output = T> + Mul<T, Output = T> + Zero + Copy,
-{
-    let mut sum = T::zero();
-    for i in 0..u.len() {
-        sum = sum + u[i] * v[i];
-    }
-    sum
-}
-
 pub fn all_eq<T>(u: &[T], v: &[T]) -> bool
 where
     T: PartialEq,
@@ -58,12 +44,6 @@ where
 mod test {
     use super::*;
     use rand::SeedableRng;
-
-    #[test]
-    fn test_dot() {
-        let a = dot_prod(&[1, 2, 3], &[1, 2, 3]);
-        assert_eq!(a, 14);
-    }
 
     #[test]
     fn test_all_eq() {

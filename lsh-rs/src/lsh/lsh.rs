@@ -9,7 +9,6 @@ use crate::{DataPoint, DataPointSlice, SqlTable};
 use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use rand::Rng;
-#[cfg(feature = "par-query")]
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -162,7 +161,6 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-#[cfg(feature = "par-query")]
 impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///

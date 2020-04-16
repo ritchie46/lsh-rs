@@ -78,7 +78,7 @@ fn lsh_to_result<T: VecHash + Send + Sync + Clone>(
         bucket_ids.par_sort_by_key(|&idx| {
             let p = &vs[idx as usize];
             let dist = &aview1(&p) - &q;
-            let l2 = l2_norm(dist.view());
+            let l2 = l2_norm(dist.as_slice().unwrap());
             (l2 * 1e5) as i32
         });
         let duration = t0.elapsed();
