@@ -63,7 +63,7 @@ pub fn cdist(q: &[f32], vs: &[DataPoint], distance_f: &str) -> Vec<f32> {
         "inner-prod" => inner_prod,
         "l2" => {
             return vs
-                .into_par_iter()
+                .into_iter()
                 .map(|v| {
                     let c = &aview1(q) - &aview1(v);
                     l2_norm(c.as_slice().unwrap())
@@ -76,10 +76,21 @@ pub fn cdist(q: &[f32], vs: &[DataPoint], distance_f: &str) -> Vec<f32> {
     vs.into_par_iter().map(|v| f(v, q)).collect()
 }
 
-pub fn sort_by_distance(q: &[f32], vs: &[DataPoint], distance_f: &str) -> Vec<usize> {
+pub fn sort_by_distance(q: &[f32], vs: &[DataPoint], distance_f: &str) -> (Vec<usize>, Vec<f32>) {
     let dist = cdist(q, vs, distance_f);
-    let mut intermed: Vec<(usize, f32)> = dist.into_par_iter().enumerate().collect();
-    intermed.par_sort_unstable_by_key(|(_idx, v)| (v * 1e3) as i64);
-    let (idx, _): (Vec<_>, Vec<_>) = intermed.into_par_iter().unzip();
-    idx
+    let mut intermed: Vec<(usize, f32)> = dist.into_iter().enumerate().collect();
+    intermed.sort_unstable_by_key(|(_idx, v)| (v * 1e3) as i64);
+    let (idx, dist): (Vec<_>, Vec<_>) = intermed.into_iter().unzip();
+    (idx, dist)
+}
+
+pub fn sort_by_distances(
+    qs: &[DataPoint],
+    vs: &[DataPoint],
+    distance_f: &str,
+) -> (Vec<Vec<usize>>, Vec<Vec<f32>>) {
+    // (Vec<usize>, Vec<f32>)
+    qs.par_iter()
+        .map(|q| sort_by_distance(q, vs, distance_f))
+        .unzip()
 }

@@ -1,10 +1,10 @@
 use lsh_rs::{
-    Error as LshError, LshMem, LshSql, MemoryTable, Result, SignRandomProjections, VecHash, L2,
-    MIPS,
+    dist::sort_by_distances as _sort_by_distances, Error as LshError, LshMem, LshSql,
+    SignRandomProjections, L2, MIPS,
 };
-use pyo3::exceptions::RuntimeError;
+use pyo3::exceptions::{RuntimeError, ValueError};
 use pyo3::prelude::*;
-use std::ops::{Deref, DerefMut};
+use pyo3::wrap_pyfunction;
 use thiserror::Error;
 
 // https://github.com/PyO3/pyo3/issues/696
@@ -31,7 +31,25 @@ fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<LshSrp>()?;
     m.add_class::<LshL2Mem>()?;
     m.add_class::<LshSrpMem>()?;
+    m.add_wrapped(wrap_pyfunction!(sort_by_distances)).unwrap();
     Ok(())
+}
+
+#[pyfunction]
+fn sort_by_distances(
+    qs: Vec<Vec<f32>>,
+    vs: Vec<Vec<f32>>,
+    distance_f: &str,
+) -> PyResult<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
+    let gil_guard = Python::acquire_gil();
+    let py = gil_guard.python();
+    let distance_f = match distance_f {
+        "cosine" => "cosine",
+        "l2" => "l2",
+        _ => return Err(PyErr::new::<ValueError, _>("distance function not correct")),
+    };
+    let r = py.allow_threads(move || _sort_by_distances(&qs, &vs, distance_f));
+    Ok(r)
 }
 
 enum LshTypes {

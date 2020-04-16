@@ -1,4 +1,4 @@
-from .floky import LshL2, LshSrp, LshSrpMem, LshL2Mem
+from .floky import LshL2, LshSrp, LshSrpMem, LshL2Mem, sort_by_distances
 from tqdm import tqdm
 from scipy.spatial.distance import cdist
 import numpy as np
