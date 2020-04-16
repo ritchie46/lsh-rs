@@ -75,7 +75,7 @@ class Base:
         self.lsh.increase_storage(len(X))
         self.store_vecs(X, chunk_size)
 
-    def _predict(self, x, distance_f, bound):
+    def _predict(self, x, distance_f, bound, only_index, top_k):
         if self.data is None:
             raise ValueError("data attribute is not set")
         if not isinstance(x, (list, np.ndarray)):
@@ -112,7 +112,11 @@ class Base:
             sorted_idx = dist.argsort()
             idx = b_idx[mask][sorted_idx]
             distances = dist[sorted_idx]
-            qrs.append(QueryResult(idx, self.data[idx], n_collisions, distances))
+            if only_index:
+                data = None
+            else:
+                data = self.data[idx][:top_k]
+            qrs.append(QueryResult(idx[:top_k], data, n_collisions, distances[:top_k]))
 
         return qrs
 
@@ -149,8 +153,8 @@ class L2(Base):
             self.db_path,
         )
 
-    def predict(self, x, bound=3):
-        return self._predict(x, 'euclidean', bound)
+    def predict(self, x, bound=3, only_index=False, top_k=int(1e9)):
+        return self._predict(x, 'euclidean', bound, only_index, top_k)
 
 
 class CosineSim(Base):
@@ -168,5 +172,5 @@ class CosineSim(Base):
             self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed
         )
 
-    def predict(self, x, bound=3):
-        return self._predict(x, 'cosine', bound)
+    def predict(self, x, bound=3, only_index=False, top_k=int(1e9)):
+        return self._predict(x, 'cosine', bound, only_index, top_k)
