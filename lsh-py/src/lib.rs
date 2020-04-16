@@ -1,11 +1,50 @@
-use lsh_rs::{
-    dist::sort_by_distances as _sort_by_distances, Error as LshError, LshMem, LshSql,
-    SignRandomProjections, L2, MIPS,
-};
+mod dist;
+use crate::dist::sort_by_distance;
+use lsh_rs::{Error as LshError, LshMem, LshSql, SignRandomProjections, L2, MIPS};
 use pyo3::exceptions::{RuntimeError, ValueError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use thiserror::Error;
+
+use ndarray::parallel::prelude::*;
+use ndarray::prelude::*;
+use numpy::PyArray2;
+use pyo3::prelude::*;
+
+#[pyfunction]
+pub fn sort_by_distances(
+    qs: &PyArray2<f32>,
+    vs: &PyArray2<f32>,
+    distance_f: &str,
+    indexes: Vec<Vec<usize>>,
+    top_k: usize,
+) -> PyResult<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
+    // let gil_guard = Python::acquire_gil();
+    // let py = gil_guard.python();
+    let distance_f = match distance_f {
+        "cosine" => "cosine",
+        "l2" | "euclidean" => "l2",
+        _ => return Err(PyErr::new::<ValueError, _>("distance function not correct")),
+    };
+
+    let vs = vs.as_array();
+    // (Vec<usize>, Vec<f32>)
+    let r = qs
+        .as_array()
+        .axis_iter(Axis(0))
+        .into_par_iter()
+        .zip(indexes)
+        .map(|(q, idx)| {
+            let vs = idx
+                .iter()
+                .map(|i| vs.index_axis(Axis(0), *i))
+                .collect::<Vec<_>>();
+            sort_by_distance(q, &vs, distance_f, top_k)
+        })
+        .unzip();
+
+    Ok(r)
+}
 
 // https://github.com/PyO3/pyo3/issues/696
 
@@ -35,22 +74,25 @@ fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-#[pyfunction]
-fn sort_by_distances(
-    qs: Vec<Vec<f32>>,
-    vs: Vec<Vec<f32>>,
-    distance_f: &str,
-) -> PyResult<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
-    let gil_guard = Python::acquire_gil();
-    let py = gil_guard.python();
-    let distance_f = match distance_f {
-        "cosine" => "cosine",
-        "l2" => "l2",
-        _ => return Err(PyErr::new::<ValueError, _>("distance function not correct")),
-    };
-    let r = py.allow_threads(move || _sort_by_distances(&qs, &vs, distance_f));
-    Ok(r)
-}
+// #[pyfunction]
+// fn sort_by_distances(
+//     qs: Vec<Vec<f32>>,
+//     vs: Vec<Vec<f32>>,
+//     distance_f: &str,
+//     idx: Vec<Vec<usize>>,
+//     top_k: usize,
+// ) -> PyResult<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
+//     let gil_guard = Python::acquire_gil();
+//     let py = gil_guard.python();
+//     let distance_f = match distance_f {
+//         "cosine" => "cosine",
+//         "l2" => "l2",
+//         _ => return Err(PyErr::new::<ValueError, _>("distance function not correct")),
+//     };
+//     let r = py.allow_threads(move ||
+//         _sort_by_distances(&qs, &vs, distance_f, &idx, top_k));
+//     Ok(r)
+// }
 
 enum LshTypes {
     L2(LshSql<L2>),

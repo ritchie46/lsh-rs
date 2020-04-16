@@ -14,6 +14,8 @@ blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]
 # See pep 513: https://www.python.org/dev/peps/pep-0513/#external-shared-libraries
 openblas-src = { version = "0.9.0", default-features = false, features = ["cblas", "static"]}
 thiserror = "1.0.13"
+numpy = "0.8.0"
+ndarray = {version = "0.13.0", features=["blas", "rayon"]}
 
 [lib]
 name = "floky"

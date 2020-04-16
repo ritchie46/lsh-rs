@@ -87,6 +87,16 @@ class Base:
             raise ValueError("x should be a 2d array")
 
         qrs = []
+        idx_batch = self.lsh.query_bucket_idx_batch(X)
+        if len(idx_batch) > 5000:
+            idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
+            for idx, dist, original_idx in zip(idx, dist, idx_batch):
+                n_collisions = original_idx
+                if only_index:
+                    data = None
+                else:
+                    data = self.data[idx]
+                qrs.append(QueryResult(idx, data, n_collisions, dist))
         for idx, x in zip(self.lsh.query_bucket_idx_batch(X), X):
             idx = np.array(idx)
             if len(idx) == 0:
