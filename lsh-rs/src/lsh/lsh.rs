@@ -554,12 +554,15 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
 }
 
 impl<T: VecHash + Serialize> LSH<SqlTable, T> {
+
+    /// Commit SqlTable backend
     pub fn commit(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
         ht.commit()?;
         Ok(())
     }
 
+    /// Init transaction of SqlTable backend.
     pub fn init_transaction(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
         ht.init_transaction()?;
@@ -583,6 +586,7 @@ impl<H> LSH<MemoryTable, H>
 where
     H: Serialize + DeserializeOwned + VecHash,
 {
+    /// Deserialize MemoryTable backend
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let mut f = File::open(path)?;
         let mut buf: Vec<u8> = vec![];
@@ -598,6 +602,8 @@ where
 
         Ok(())
     }
+
+    /// Serialize MemoryTable backend
     pub fn dump<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let hash_tables = bincode::serialize(&self.hash_tables)?;
         let hashers = bincode::serialize(&self.hashers)?;
