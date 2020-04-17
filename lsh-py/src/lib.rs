@@ -55,6 +55,8 @@ type IntResult<T> = std::result::Result<T, PyLshErr>;
 enum PyLshErr {
     #[error(transparent)]
     Err(#[from] LshError),
+    #[error("array memory order is not contiguous")]
+    NonContiguous,
 }
 
 impl std::convert::From<PyLshErr> for PyErr {
@@ -73,26 +75,6 @@ fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(sort_by_distances)).unwrap();
     Ok(())
 }
-
-// #[pyfunction]
-// fn sort_by_distances(
-//     qs: Vec<Vec<f32>>,
-//     vs: Vec<Vec<f32>>,
-//     distance_f: &str,
-//     idx: Vec<Vec<usize>>,
-//     top_k: usize,
-// ) -> PyResult<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
-//     let gil_guard = Python::acquire_gil();
-//     let py = gil_guard.python();
-//     let distance_f = match distance_f {
-//         "cosine" => "cosine",
-//         "l2" => "l2",
-//         _ => return Err(PyErr::new::<ValueError, _>("distance function not correct")),
-//     };
-//     let r = py.allow_threads(move ||
-//         _sort_by_distances(&qs, &vs, distance_f, &idx, top_k));
-//     Ok(r)
-// }
 
 enum LshTypes {
     L2(LshSql<L2>),
@@ -138,8 +120,9 @@ impl Base {
         Ok(())
     }
 
-    fn _store_vecs(&mut self, vs: Vec<Vec<f32>>) -> IntResult<()> {
-        call_lsh_types!(&mut self.lsh, store_vecs, &vs,)?;
+    fn _store_vecs(&mut self, vs: &PyArray2<f32>) -> IntResult<()> {
+        let vs = vs.as_array();
+        call_lsh_types!(&mut self.lsh, store_array, vs,)?;
         Ok(())
     }
     fn _query_bucket_idx(&self, v: Vec<f32>) -> IntResult<Vec<u32>> {
@@ -152,18 +135,27 @@ impl Base {
         Ok(())
     }
 
-    fn _query_batch(&self, vs: Vec<Vec<f32>>) -> IntResult<Vec<Vec<u32>>> {
+    fn _query_batch(&self, vs: &PyArray2<f32>) -> IntResult<Vec<Vec<u32>>> {
         let gil_guard = Python::acquire_gil();
         let py = gil_guard.python();
         // allow threads doesn't make a difference on the rust side. But allows other python
         // code to run.
         // https://github.com/PyO3/pyo3/issues/649#issuecomment-546656381
+
+        let vs = vs.as_array();
+        if !vs.is_standard_layout() {
+            return Err(PyLshErr::NonContiguous);
+        }
         let q = match &self.lsh {
-            LshTypes::L2(lsh) => lsh.query_bucket_ids_batch(&vs),
-            LshTypes::L2Mem(lsh) => py.allow_threads(move || lsh.query_bucket_ids_batch_par(&vs)),
-            LshTypes::Mips(lsh) => lsh.query_bucket_ids_batch(&vs),
-            LshTypes::Srp(lsh) => lsh.query_bucket_ids_batch(&vs),
-            LshTypes::SrpMem(lsh) => py.allow_threads(move || lsh.query_bucket_ids_batch_par(&vs)),
+            LshTypes::L2(lsh) => lsh.query_bucket_ids_batch_arr(vs),
+            LshTypes::L2Mem(lsh) => {
+                py.allow_threads(move || lsh.query_bucket_ids_batch_arr_par(vs))
+            }
+            LshTypes::Mips(lsh) => lsh.query_bucket_ids_batch_arr(vs),
+            LshTypes::Srp(lsh) => lsh.query_bucket_ids_batch_arr(vs),
+            LshTypes::SrpMem(lsh) => {
+                py.allow_threads(move || lsh.query_bucket_ids_batch_arr_par(vs))
+            }
             _ => panic!("base not initialized"),
         }?;
         Ok(q)
@@ -266,7 +258,7 @@ impl Base {
         Ok(())
     }
 
-    fn store_vecs(&mut self, vs: Vec<Vec<f32>>) -> PyResult<()> {
+    fn store_vecs(&mut self, vs: &PyArray2<f32>) -> PyResult<()> {
         let gil_guard = Python::acquire_gil();
         let py = gil_guard.python();
         py.allow_threads(move || self._store_vecs(vs))?;
@@ -283,7 +275,7 @@ impl Base {
         Ok(q)
     }
 
-    fn query_bucket_idx_batch(&self, vs: Vec<Vec<f32>>) -> PyResult<Vec<Vec<u32>>> {
+    fn query_bucket_idx_batch(&self, vs: &PyArray2<f32>) -> PyResult<Vec<Vec<u32>>> {
         let q = self._query_batch(vs)?;
         Ok(q)
     }

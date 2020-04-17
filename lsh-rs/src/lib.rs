@@ -121,6 +121,7 @@ pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_
 #[cfg(feature = "stats")]
 pub mod stats;
 
+pub type FloatSize = f32;
 pub type DataPoint = Vec<f32>;
 pub type DataPointSlice = [f32];
 pub use error::Error;

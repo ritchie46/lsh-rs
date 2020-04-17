@@ -3,11 +3,12 @@ use crate::{
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
     multi_probe::create_hash_permutation,
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
-    Error, Result,
+    Error, FloatSize, Result,
 };
 use crate::{DataPoint, DataPointSlice, SqlTable};
 use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
+use ndarray::prelude::*;
 use rand::Rng;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
@@ -164,13 +165,25 @@ impl<T: HashTables> LSH<T, MIPS> {
 impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
-    /// Needs `par-query` feature.
-    ///
     /// # Arguments
     /// * `vs` - Array of data points.
     pub fn query_bucket_ids_batch_par(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
         vs.into_par_iter()
             .map(|v| self.query_bucket_ids(v))
+            .collect()
+    }
+
+    /// Query bucket collision for a batch of data points in parallel.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    pub fn query_bucket_ids_batch_arr_par(
+        &self,
+        vs: ArrayView2<FloatSize>,
+    ) -> Result<Vec<Vec<u32>>> {
+        vs.axis_iter(Axis(0))
+            .into_par_iter()
+            .map(|v| self.query_bucket_ids(v.as_slice().unwrap()))
             .collect()
     }
 }
@@ -304,8 +317,8 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     ///```
     /// use lsh_rs::LshSql;
     /// let mut lsh = LshSql::new(5, 10, 3).srp();
-    /// let vs = &[vec![2., 3., 4.],
-    ///           vec![-1., -1., 1.]];
+    /// let vs = &[&[2., 3., 4.],
+    ///            &[-1., -1., 1.]];
     /// let ids = lsh.store_vecs(vs);
     /// ```
     pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
@@ -335,6 +348,52 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
         let mut insert_idx = Vec::with_capacity(vs.len());
         for (hash, v, i) in rx {
             insert_idx.push(ht.put(hash, v, i)?);
+        }
+        self.hash_tables.replace(ht);
+        Ok(insert_idx)
+    }
+
+    /// Store a 2D array in storage. Before storing the storage capacity is possibly
+    /// increased to match the data points.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    ///
+    /// # Examples
+    ///```
+    /// use lsh_rs::LshSql;
+    /// use ndarray::prelude::*;
+    /// let mut lsh = LshSql::new(5, 10, 3).srp();
+    /// let vs = array![[1., 2., 3.], [4., 5., 6.]];
+    /// let ids = lsh.store_array(vs);
+    /// ```
+    pub fn store_array(&mut self, vs: ArrayView2<FloatSize>) -> Result<Vec<u32>> {
+        self.validate_vec(vs.slice(s![0, ..]).as_slice().unwrap())?;
+        self.hash_tables
+            .as_mut()
+            .unwrap()
+            .increase_storage(vs.len());
+
+        // one thread prepares hashes, while the other loads the hashes in the hashtables.
+        let (tx, rx) = unbounded();
+        let hashers = &self.hashers;
+        crossbeam::scope(|s| {
+            s.spawn(|_| {
+                vs.axis_iter(Axis(0)).for_each(|v| {
+                    for (i, proj) in hashers.iter().enumerate() {
+                        let hash = proj.hash_vec_put(v.as_slice().unwrap());
+                        tx.send((hash, v, i)).unwrap();
+                    }
+                });
+                drop(tx)
+            });
+        })
+        .expect("something went wrong in the thread that prepares the hashes.");
+
+        let mut ht = self.hash_tables.take().unwrap();
+        let mut insert_idx = Vec::with_capacity(vs.len());
+        for (hash, v, i) in rx {
+            insert_idx.push(ht.put(hash, v.as_slice().unwrap(), i)?);
         }
         self.hash_tables.replace(ht);
         Ok(insert_idx)
@@ -414,6 +473,16 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     /// * `vs` - Array of data points.
     pub fn query_bucket_ids_batch(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
         vs.iter().map(|v| self.query_bucket_ids(v)).collect()
+    }
+
+    /// Query bucket collision for a batch of data points.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    pub fn query_bucket_ids_batch_arr(&self, vs: ArrayView2<FloatSize>) -> Result<Vec<Vec<u32>>> {
+        vs.axis_iter(Axis(0))
+            .map(|v| self.query_bucket_ids(v.as_slice().unwrap()))
+            .collect()
     }
 
     /// Delete data point from storage. This does not free memory as the storage vector isn't resized.

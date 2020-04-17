@@ -56,4 +56,3 @@ pub fn inner_prod(a: &[f32], b: &[f32]) -> f32 {
 pub fn cosine_sim(a: &[f32], b: &[f32]) -> f32 {
     inner_prod(a, b) / (l2_norm(a) * l2_norm(b))
 }
-

@@ -15,7 +15,7 @@ blas = ["blas-src", "ndarray/blas"]
 stats = ["statrs"]
 
 [dependencies]
-ndarray = {version = "0.13", features=["serde"]}
+ndarray = {version = "0.13", features=["serde", "rayon"]}
 blas-src = { version = "0.6", defeault-features = false, optional = true}
 rand = {version = "0.7", features = ["small_rng"]}
 rand_distr = "0.2"

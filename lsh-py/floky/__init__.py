@@ -71,16 +71,16 @@ class Base:
 
     def fit(self, X, chunk_size=250):
         self.reset()
-        self.data = X
+        self.data = np.ascontiguousarray(np.array(X, dtype=np.float32))
         self.lsh.increase_storage(len(X))
-        self.store_vecs(X, chunk_size)
+        self.store_vecs(self.data, chunk_size)
 
-    def _predict(self, x, distance_f, bound, only_index, top_k):
+    def _predict(self, x, distance_f, only_index, top_k):
         if self.data is None:
             raise ValueError("data attribute is not set")
         if not isinstance(x, (list, np.ndarray)):
             raise ValueError("x is not an array")
-        X = np.array(x)
+        X = np.ascontiguousarray(np.array(x, dtype=np.float32))
         if len(x.shape) == 1:
             X = np.array([x])
         elif len(x.shape) != 2:
@@ -88,45 +88,47 @@ class Base:
 
         qrs = []
         idx_batch = self.lsh.query_bucket_idx_batch(X)
-        if len(idx_batch) > 5000:
-            idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
-            for idx, dist, original_idx in zip(idx, dist, idx_batch):
-                n_collisions = original_idx
-                if only_index:
-                    data = None
-                else:
-                    data = self.data[idx]
-                qrs.append(QueryResult(idx, data, n_collisions, dist))
-        for idx, x in zip(self.lsh.query_bucket_idx_batch(X), X):
-            idx = np.array(idx)
-            if len(idx) == 0:
-                qrs.append(None)
-                continue
-
-            n_collisions = len(idx)
-
-            step = bound * self.n_hash_tables
-            i = 0
-            j = step
-
-            while i < n_collisions:
-                b_idx = idx[i: j]
-                i = j
-                j += step
-                dist = cdist(x[None, :], self.data[b_idx], metric=distance_f).flatten()
-
-                mask = dist < 1
-                if mask.sum() > 0:
-                    break
-            dist = dist[mask]
-            sorted_idx = dist.argsort()
-            idx = b_idx[mask][sorted_idx]
-            distances = dist[sorted_idx]
+        idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
+        for idx, dist, original_idx in zip(idx, dist, idx_batch):
+            n_collisions = original_idx
             if only_index:
                 data = None
             else:
-                data = self.data[idx][:top_k]
-            qrs.append(QueryResult(idx[:top_k], data, n_collisions, distances[:top_k]))
+                data = self.data[idx]
+            qrs.append(QueryResult(idx, data, n_collisions, dist))
+
+        # if len(idx_batch) > 5000:
+
+        # for idx, x in zip(self.lsh.query_bucket_idx_batch(X), X):
+        #     idx = np.array(idx)
+        #     if len(idx) == 0:
+        #         qrs.append(None)
+        #         continue
+        #
+        #     n_collisions = len(idx)
+        #
+        #     step = bound * self.n_hash_tables
+        #     i = 0
+        #     j = step
+        #
+        #     while i < n_collisions:
+        #         b_idx = idx[i: j]
+        #         i = j
+        #         j += step
+        #         dist = cdist(x[None, :], self.data[b_idx], metric=distance_f).flatten()
+        #
+        #         mask = dist < 1
+        #         if mask.sum() > 0:
+        #             break
+        #     dist = dist[mask]
+        #     sorted_idx = dist.argsort()
+        #     idx = b_idx[mask][sorted_idx]
+        #     distances = dist[sorted_idx]
+        #     if only_index:
+        #         data = None
+        #     else:
+        #         data = self.data[idx][:top_k]
+        #     qrs.append(QueryResult(idx[:top_k], data, n_collisions, distances[:top_k]))
 
         return qrs
 
@@ -163,8 +165,8 @@ class L2(Base):
             self.db_path,
         )
 
-    def predict(self, x, bound=3, only_index=False, top_k=int(1e9)):
-        return self._predict(x, 'euclidean', bound, only_index, top_k)
+    def predict(self, x, only_index=False, top_k=5):
+        return self._predict(x, 'euclidean', only_index, top_k)
 
 
 class CosineSim(Base):
@@ -182,5 +184,5 @@ class CosineSim(Base):
             self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed
         )
 
-    def predict(self, x, bound=3, only_index=False, top_k=int(1e9)):
-        return self._predict(x, 'cosine', bound, only_index, top_k)
+    def predict(self, x, only_index=False, top_k=5):
+        return self._predict(x, 'cosine', only_index, top_k)
