@@ -12,6 +12,7 @@ use numpy::PyArray2;
 use pyo3::prelude::*;
 
 #[pyfunction]
+#[text_signature = "(qs, vs, distance_f, indexes, top_k, /)"]
 pub fn sort_by_distances(
     qs: &PyArray2<f32>,
     vs: &PyArray2<f32>,

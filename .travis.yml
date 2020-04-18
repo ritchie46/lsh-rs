@@ -1,5 +1,67 @@
-dist: bionic
 language: rust
 cache: cargo
+os: linux
+dist: xenial
+
+env:
+  global:
+      - secure: HUwB7YDEJP1KuOOdYpQN/L4/nxnqzkrDe7ECY/TURjdA/HV/TQl5h7dZajET00Wg+MeGrS8ZQViqN6Vdo2i7DKucqef+ZXNhKCztmRnK6eD1t4a2Fp6+vxjQQXzNz4MOXCWAmkYlkJb85KBPTSyWGmPsL2WljMFj0HrB/feSRV1sk5lpdvxyO+KSWmTGAr/f/S+czu/m7c2FUWHjcoPktviIhlhnXMQtMfKcvDiHCKEyuDFvN1R9VSbSl4KhnGyAwi6p7O3IK6tnr9piTHNl9bDGC8/5pYEP8etjMAubvcBrsKoiCw3PaHoUOj9OiRlEz67SEQvlKn1lQoktNF+fPxEnx+9z4dTD1u/uQ8FJfYiVbxg/D0lHcl8+EuBc3IfWoHygWgYUz9NjfPuSVXeROgk5p6xxt5BYwpfdTmYKdcpnCZEVzW/WEuqm8DjyDhFMEke8Wzp/KCdVEV+jtWNK6WNegzWZACXO7Hjmt9vxH0R2iXFA8HA14PWM4m5jMeineUf+I3HWF+a1pe1P2jSMXJHwCPbxEyVPCDYlsrYyJXn4C8yAzOgpLD4+x1jv+075I0b7WbjF9ZVegfhrq01VbD09hRygGEp6HZE86AriX6BcxT4HlaefkttHC4iCfdYIorpxEw7DaEx0SNgx2SG6ijdfCjMeARQ8EQFhvybKOsE=
+
+before_install:
+  - sudo apt-get -q update
+  - sudo apt-get -y install gfortran  libopenblas-dev
+
+install:
+  - python3 -m pip install maturin
+
 script:
-  - make test
+  - |
+    if [ "$TEST" == "1" ]; then
+      make test
+    else
+      rustup target add $TARGET;
+      cd lsh-py && rustup override set nightly && mkdir wheels
+      maturin publish \
+      -o wheels \
+      --repository-url ${PYPI} \
+      --username ritchie46 \
+      --target ${TARGET}
+      ls wheels
+    fi
+
+jobs:
+  include:
+    - os: linux
+      stage: test
+      env: TEST=1
+
+#    - os: osx
+#      env: TARGET=x86_64-apple-darwin
+    - os: linux
+      stage: deploy
+      env: TARGET=x86_64-unknown-linux-gnu PYPI=https://upload.pypi.org/legacy/
+
+    - os: linux
+      stage: test-deploy
+      env: TARGET=x86_64-unknown-linux-gnu PYPI=https://test.pypi.org/legacy/
+
+stages:
+  - test
+  - name: test-deploy
+    if: branch = test-release
+  - name: deploy
+    if: branch = release
+
+addons:
+  apt:
+    sources:
+      - deadsnakes
+    packages:
+      - libdbus-1-dev
+      - musl-tools
+      - fakeroot
+      - python3.5-dev
+      - python3.6-dev
+      - python3.7-dev
+      - python3.8-dev
+      - python3-pip

@@ -97,39 +97,6 @@ class Base:
                 data = self.data[idx]
             qrs.append(QueryResult(idx, data, n_collisions, dist))
 
-        # if len(idx_batch) > 5000:
-
-        # for idx, x in zip(self.lsh.query_bucket_idx_batch(X), X):
-        #     idx = np.array(idx)
-        #     if len(idx) == 0:
-        #         qrs.append(None)
-        #         continue
-        #
-        #     n_collisions = len(idx)
-        #
-        #     step = bound * self.n_hash_tables
-        #     i = 0
-        #     j = step
-        #
-        #     while i < n_collisions:
-        #         b_idx = idx[i: j]
-        #         i = j
-        #         j += step
-        #         dist = cdist(x[None, :], self.data[b_idx], metric=distance_f).flatten()
-        #
-        #         mask = dist < 1
-        #         if mask.sum() > 0:
-        #             break
-        #     dist = dist[mask]
-        #     sorted_idx = dist.argsort()
-        #     idx = b_idx[mask][sorted_idx]
-        #     distances = dist[sorted_idx]
-        #     if only_index:
-        #         data = None
-        #     else:
-        #         data = self.data[idx][:top_k]
-        #     qrs.append(QueryResult(idx[:top_k], data, n_collisions, distances[:top_k]))
-
         return qrs
 
     def clean(self):
