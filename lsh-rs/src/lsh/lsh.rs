@@ -1,3 +1,4 @@
+use crate::multi_probe::step_wise_probing;
 use crate::utils::create_rng;
 use crate::{
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
@@ -523,16 +524,7 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
 
     fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
         self.validate_vec(v)?;
-        let mut probing_seq = HashSet::with_capacity_and_hasher(
-            self._multi_probe_n_probes,
-            fnv::FnvBuildHasher::default(),
-        );
-        for _ in 0..self._multi_probe_n_probes {
-            probing_seq.insert(create_hash_permutation(
-                self.n_projections,
-                self._multi_probe_n_perturbations,
-            ));
-        }
+        let probing_seq = step_wise_probing(self.n_projections, self._multi_probe_n_perturbations);
 
         let mut bucket_union = HashSet::default();
         for (i, proj) in self.hashers.iter().enumerate() {
