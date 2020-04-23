@@ -1,4 +1,3 @@
-#![cfg(feature = "stats")]
 use crate::{dist::l2_norm, hash::HashPrimitive, DataPoint, HashTables, LshMem, Result, VecHash};
 use fnv::FnvHashSet;
 use ndarray::aview1;

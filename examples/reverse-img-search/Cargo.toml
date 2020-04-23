@@ -5,7 +5,7 @@ authors = ["ritchie46 <ritchie46@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-lsh-rs = {path = "../../lsh-rs", features=["blas", "stats"]}
+lsh-rs = {path = "../../lsh-rs", features=["blas"]}
 blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}
 ndarray = {version = "0.13", features=["blas", "rayon"]}
 image = "0.23.1"

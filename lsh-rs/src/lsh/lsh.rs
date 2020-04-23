@@ -554,7 +554,6 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
 }
 
 impl<T: VecHash + Serialize> LSH<SqlTable, T> {
-
     /// Commit SqlTable backend
     pub fn commit(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
