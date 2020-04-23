@@ -1,4 +1,4 @@
-use crate::{dist::l2_norm, utils::create_rng};
+use crate::{dist::l2_norm, utils::create_rng, DataPointSlice, FloatSize};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
@@ -60,9 +60,9 @@ impl VecHash for SignRandomProjections {
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
 #[derive(Serialize, Deserialize, Clone)]
 pub struct L2 {
-    a: Array2<f32>,
-    r: f32,
-    b: Array1<f32>,
+    pub a: Array2<f32>,
+    pub r: f32,
+    pub b: Array1<f32>,
     n_projections: usize,
 }
 
@@ -81,20 +81,25 @@ impl L2 {
         }
     }
 
-    fn hash_vec(&self, v: &[f32]) -> Hash {
-        let h = (self.a.dot(&aview1(v)) + &self.b) / self.r;
-        let h = h.map(|x| x.floor() as HashPrimitive);
-        h.iter().copied().collect()
+    pub(crate) fn hash_vec(&self, v: &DataPointSlice) -> Array1<FloatSize> {
+        ((self.a.dot(&aview1(v)) + &self.b) / self.r).mapv(|x| x.floor())
+    }
+
+    fn hash_and_cast_vec(&self, v: &[f32]) -> Hash {
+        // not DRY. we don't call hash_vec to save function call.
+        ((self.a.dot(&aview1(v)) + &self.b) / self.r)
+            .mapv(|x| x.floor() as HashPrimitive)
+            .to_vec()
     }
 }
 
 impl VecHash for L2 {
     fn hash_vec_query(&self, v: &[f32]) -> Hash {
-        self.hash_vec(v)
+        self.hash_and_cast_vec(v)
     }
 
     fn hash_vec_put(&self, v: &[f32]) -> Hash {
-        self.hash_vec(v)
+        self.hash_and_cast_vec(v)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::utils::create_rng;
-use crate::Hash;
-use crate::HashPrimitive;
+use crate::{DataPointSlice, FloatSize, Hash, HashPrimitive, VecHash, L2};
 use itertools::Itertools;
+use ndarray::prelude::*;
 use rand::distributions::Uniform;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -36,11 +36,6 @@ pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<HashPrimitive> 
         permut[i] += v
     }
     permut
-}
-
-pub fn query_directed_probing(hash_len: usize, budget: usize, w: f32) {
-    // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
-    // https://www.youtube.com/watch?v=c5DHtx5VxX8
 }
 
 /// Retrieve perturbation indexes. Every index in a hash can be perturbed by +1 or -1.
@@ -92,13 +87,42 @@ pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<HashPrimitiv
             .take(budget as usize)
             .for_each(|v| {
                 let mut new_perturb = vec![0; hash_len];
-                v.iter().for_each(|(idx, shift)| new_perturb[*idx] += *shift);
+                v.iter()
+                    .for_each(|(idx, shift)| new_perturb[*idx] += *shift);
                 hash_perturbs.push(new_perturb)
             });
         k += 1;
         budget -= n_combinations;
     }
     hash_perturbs
+}
+
+impl L2 {
+    /// Computes the distance between the query hash and the boundary of the slot r (W in the paper)
+    ///
+    /// As stated by Multi-Probe LSH paper:
+    /// For δ ∈ {−1, +1}, let xi(δ) be the distance of q from the boundary of the slot
+    fn distance_to_bound(
+        &self,
+        q: &DataPointSlice,
+        hash: Option<Hash>,
+    ) -> (Array1<FloatSize>, Array1<FloatSize>) {
+        let hash = match hash {
+            None => self.hash_vec(q).to_vec(),
+            Some(h) => h.iter().map(|&v| v as FloatSize).collect_vec(),
+        };
+        // let hash = hash.unwrap_or_else(|| self.hash_vec(q));
+        let f = self.a.dot(&aview1(q)) + &self.b;
+        let xi_min1 = f - &aview1(&hash) * self.r;
+        let xi_plus1: Array1<FloatSize> = self.r - &xi_min1;
+        (xi_min1, xi_plus1)
+    }
+}
+
+pub fn query_directed_probing(l2: &L2, q: &DataPointSlice, budget: usize) {
+    // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
+    // https://www.youtube.com/watch?v=c5DHtx5VxX8
+    let hash = l2.hash_vec_query(q);
 }
 
 #[cfg(test)]
@@ -125,5 +149,13 @@ mod test {
         let a = step_wise_probing(4, 20);
         assert_eq!(vec![1, 0, 0, 0], a[0]);
         assert_eq!(vec![0, 1, 0, -1], a[a.len() - 1]);
+    }
+
+    #[test]
+    fn test_l2_xi_distances() {
+        let l2 = L2::new(4, 4., 3, 1);
+        let (xi_min, xi_plus) = l2.distance_to_bound(&[1., 2., 3., 1.], None);
+        assert_eq!(xi_min, arr1(&[2.0210547, 1.9154847, 0.89937115]));
+        assert_eq!(xi_plus, arr1(&[1.9789453, 2.0845153, 3.1006289]));
     }
 }
