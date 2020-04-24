@@ -1,4 +1,3 @@
-use crate::DataPoint;
 use ndarray::prelude::*;
 use rayon::prelude::*;
 

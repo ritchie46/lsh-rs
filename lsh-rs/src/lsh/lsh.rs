@@ -2,7 +2,6 @@ use crate::multi_probe::step_wise_probing;
 use crate::utils::create_rng;
 use crate::{
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
-    multi_probe::create_hash_permutation,
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     Error, FloatSize, Result,
 };
