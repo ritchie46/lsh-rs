@@ -90,14 +90,6 @@ use lsh_rs::LshSql;
 let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).only_index().srp();
 ```
 
-# Builder pattern methods
-The following methods can be used to change internal state during object initialization:
-* [only_index](struct.LSH.html#method.only_index)
-* [seed](struct.LSH.html#method.seed)
-* [set_database_file](struct.LSH.html#method.set_database_file)
-* [multi_probe](struct.LSH.html#method.multi_probe)
-* [increase_storage](struct.LSH.html#method.increase_storage)
-
 ## BLAS support
 Utilizing [BLAS](https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) will heavily increase
 performance. To make use of BLAS, install `lsh-rs` w/ `"blas"` feature and reinstall `ndarray` w/ `"blas"` support.

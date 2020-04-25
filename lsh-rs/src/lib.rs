@@ -88,7 +88,7 @@
 //! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).only_index().srp();
 //! ```
 //!
-//! # Builder pattern methods
+//! ## Builder pattern methods
 //! The following methods can be used to change internal state during object initialization:
 //! * [only_index](struct.LSH.html#method.only_index)
 //! * [seed](struct.LSH.html#method.seed)
