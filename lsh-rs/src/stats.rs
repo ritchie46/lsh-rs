@@ -54,7 +54,7 @@ pub struct OptRes {
     pub unique_hash_values: FnvHashSet<HashPrimitive>,
 }
 
-fn lsh_to_result<T: VecHash + Send + Sync + Clone>(
+fn lsh_to_result<T: 'static + VecHash + Send + Sync + Clone>(
     lsh: LshMem<T>,
     vs: &[DataPoint],
     k: usize,

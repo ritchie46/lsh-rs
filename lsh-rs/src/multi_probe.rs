@@ -1,5 +1,6 @@
 use crate::utils::create_rng;
-use crate::{DataPointSlice, FloatSize, Hash, HashPrimitive, VecHash, L2};
+use crate::{DataPointSlice, FloatSize, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH};
+use fnv::FnvHashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
 use ndarray::stack;
@@ -7,6 +8,7 @@ use rand::distributions::Uniform;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use statrs::function::factorial::binomial;
+use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
@@ -258,9 +260,56 @@ impl L2 {
     }
 }
 
+pub trait MultiProbe {
+    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>>;
+}
+
+impl<H: VecHash + Sync + Any, T: HashTables> MultiProbe for LSH<T, H> {
+    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>> {
+        // uses dynamic typing through runtime reflection.
+        // TODO:
+        //  use impl specialization once stable
+        //  autoref specialization was tried but did not succeed.
+        //  https://github.com/dtolnay/case-studies/blob/master/autoref-specialization/README.md
+        self.validate_vec(v)?;
+        let mut bucket_union = FnvHashSet::default();
+
+        let value_any = &self.hashers as &dyn Any;
+        match value_any.downcast_ref::<Vec<L2>>() {
+            Some(l2_hashers) => {
+                for (i, hasher) in l2_hashers.iter().enumerate() {
+                    let hashes = hasher.query_directed_probing(v, self._multi_probe_budget);
+                    for hash in hashes {
+                        self.process_bucket_union_result(&hash, i, &mut bucket_union)?
+                    }
+                }
+            }
+            None => {
+                let probing_seq = step_wise_probing(self.n_projections, self._multi_probe_budget);
+                for (i, proj) in self.hashers.iter().enumerate() {
+                    // fist process the original query
+                    let original_hash = proj.hash_vec_query(v);
+                    self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
+
+                    for pertub in &probing_seq {
+                        let hash = original_hash
+                            .iter()
+                            .zip(pertub)
+                            .map(|(&a, &b)| a + b)
+                            .collect();
+                        self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
+                    }
+                }
+            }
+        }
+        Ok(bucket_union)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::LshMem;
 
     #[test]
     fn test_permutation() {

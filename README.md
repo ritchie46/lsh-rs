@@ -9,10 +9,19 @@ For more information on the subject see:
 * [Section 2. describes the hash families used in this crate](https://arxiv.org/pdf/1411.3787.pdf)
 * [LSH and neural networks](https://www.ritchievink.com/blog/2020/04/07/sparse-neural-networks-and-hash-tables-with-locality-sensitive-hashing/)
 
-## Hashing implementations
-* Signed Random Projections (Cosine similarity)
-* L2 distance
-* Maximum Inner Product (Dot products)
+## Implementations
+
+* **Base LSH**
+    - Signed Random Projections (Cosine similarity)
+    - L2 distance
+    - Maximum Inner Product (Dot products)
+* **Multi Probe LSH**
+    - **Step wise probing**
+        - SRP
+        - L2
+        - MIPS
+    - **Query directed probing**
+        - L2
 
 ## Getting started
 

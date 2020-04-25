@@ -2,6 +2,7 @@ use crate::multi_probe::step_wise_probing;
 use crate::utils::create_rng;
 use crate::{
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
+    multi_probe::MultiProbe,
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     Error, FloatSize, Result,
 };
@@ -59,10 +60,8 @@ pub struct LSH<T: HashTables, H: VecHash> {
     /// store only indexes and no data points.
     only_index_storage: bool,
     _multi_probe: bool,
-    /// Number of (optional) changing bits per hash.
-    _multi_probe_n_perturbations: usize,
-    /// Length of probing sequence
-    _multi_probe_n_probes: usize,
+    /// multi probe budget
+    pub(crate) _multi_probe_budget: usize,
     _db_path: String,
 }
 
@@ -90,8 +89,7 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
         _seed: lsh._seed,
         only_index_storage: lsh.only_index_storage,
         _multi_probe: lsh._multi_probe,
-        _multi_probe_n_perturbations: lsh._multi_probe_n_perturbations,
-        _multi_probe_n_probes: lsh._multi_probe_n_probes,
+        _multi_probe_budget: lsh._multi_probe_budget,
         _db_path: lsh._db_path.clone(),
     };
     Ok(lsh)
@@ -162,7 +160,7 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
+impl<H: 'static + VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
     /// # Arguments
@@ -188,7 +186,7 @@ impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     }
 }
 
-impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
+impl<H: 'static + VecHash + Sync, T: HashTables> LSH<T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -207,14 +205,13 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
             _seed: 0,
             only_index_storage: false,
             _multi_probe: false,
-            _multi_probe_n_perturbations: 3,
-            _multi_probe_n_probes: 16,
+            _multi_probe_budget: 16,
             _db_path: "./lsh.db3".to_string(),
         };
         lsh
     }
 
-    fn validate_vec(&self, v: &DataPointSlice) -> Result<()> {
+    pub(crate) fn validate_vec(&self, v: &DataPointSlice) -> Result<()> {
         if !(v.len() == self.dim) {
             return Err(Error::Failed(
                 "data point is not valid, are the dimensions correct?".to_string(),
@@ -241,12 +238,10 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     /// Enable multi-probing LSH and set multi-probing parameters.
     ///
     /// # Arguments
-    /// * `n_probes` - The length of the probing sequence.
-    /// * `n_permutations` - The upper bounds of bits that may shift per hash.
-    pub fn multi_probe(&mut self, n_probes: usize, n_permutations: usize) -> &mut Self {
+    /// * `budget` - The number of probes (close hashes) will be executed per query.
+    pub fn multi_probe(&mut self, budget: usize) -> &mut Self {
         self._multi_probe = true;
-        self._multi_probe_n_perturbations = n_permutations;
-        self._multi_probe_n_probes = n_probes;
+        self._multi_probe_budget = budget;
         self
     }
 
@@ -500,7 +495,7 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
         Ok(())
     }
 
-    fn process_bucket_union_result(
+    pub(crate) fn process_bucket_union_result(
         &self,
         hash: &Hash,
         hash_table_idx: usize,
@@ -519,28 +514,6 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
             }
             Err(e) => Err(e),
         }
-    }
-
-    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
-        self.validate_vec(v)?;
-        let probing_seq = step_wise_probing(self.n_projections, self._multi_probe_n_perturbations);
-
-        let mut bucket_union = HashSet::default();
-        for (i, proj) in self.hashers.iter().enumerate() {
-            // fist process the original query
-            let original_hash = proj.hash_vec_query(v);
-            self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
-
-            for pertub in &probing_seq {
-                let hash = original_hash
-                    .iter()
-                    .zip(pertub)
-                    .map(|(&a, &b)| a + b)
-                    .collect();
-                self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
-            }
-        }
-        Ok(bucket_union)
     }
 }
 
