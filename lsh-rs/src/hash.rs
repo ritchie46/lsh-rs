@@ -1,4 +1,6 @@
-use crate::{dist::l2_norm, utils::create_rng, DataPointSlice, FloatSize};
+use crate::{
+    dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng, DataPointSlice, FloatSize,
+};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
@@ -10,6 +12,10 @@ pub type Hash = Vec<HashPrimitive>;
 pub trait VecHash {
     fn hash_vec_query(&self, v: &[f32]) -> Hash;
     fn hash_vec_put(&self, v: &[f32]) -> Hash;
+
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe> {
+        None
+    }
 }
 
 /// Also called SimHash.
@@ -100,6 +106,10 @@ impl VecHash for L2 {
 
     fn hash_vec_put(&self, v: &[f32]) -> Hash {
         self.hash_and_cast_vec(v)
+    }
+
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe> {
+        Some(self)
     }
 }
 

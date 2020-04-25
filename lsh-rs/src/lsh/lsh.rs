@@ -1,9 +1,7 @@
-use crate::multi_probe::step_wise_probing;
-use crate::utils::create_rng;
 use crate::{
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
-    multi_probe::MultiProbe,
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
+    utils::create_rng,
     Error, FloatSize, Result,
 };
 use crate::{DataPoint, DataPointSlice, SqlTable};
@@ -160,7 +158,7 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-impl<H: 'static + VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
+impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
     /// # Arguments
@@ -186,7 +184,101 @@ impl<H: 'static + VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     }
 }
 
-impl<H: 'static + VecHash + Sync, T: HashTables> LSH<T, H> {
+impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
+    /// Store multiple vectors in storage. Before storing the storage capacity is possibly
+    /// increased to match the data points.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    ///
+    /// # Examples
+    ///```
+    /// use lsh_rs::LshSql;
+    /// let mut lsh = LshSql::new(5, 10, 3).srp();
+    /// let vs = &[&[2., 3., 4.],
+    ///            &[-1., -1., 1.]];
+    /// let ids = lsh.store_vecs(vs);
+    /// ```
+    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
+        self.validate_vec(&vs[0])?;
+        self.hash_tables
+            .as_mut()
+            .unwrap()
+            .increase_storage(vs.len());
+
+        // one thread prepares hashes, while the other loads the hashes in the hashtables.
+        let (tx, rx) = unbounded();
+        let hashers = &self.hashers;
+        crossbeam::scope(|s| {
+            s.spawn(|_| {
+                vs.iter().for_each(|v| {
+                    for (i, proj) in hashers.iter().enumerate() {
+                        let hash = proj.hash_vec_put(v);
+                        tx.send((hash, v, i)).unwrap();
+                    }
+                });
+                drop(tx)
+            });
+        })
+        .expect("something went wrong in the thread that prepares the hashes.");
+
+        let mut ht = self.hash_tables.take().unwrap();
+        let mut insert_idx = Vec::with_capacity(vs.len());
+        for (hash, v, i) in rx {
+            insert_idx.push(ht.put(hash, v, i)?);
+        }
+        self.hash_tables.replace(ht);
+        Ok(insert_idx)
+    }
+
+    /// Store a 2D array in storage. Before storing the storage capacity is possibly
+    /// increased to match the data points.
+    ///
+    /// # Arguments
+    /// * `vs` - Array of data points.
+    ///
+    /// # Examples
+    ///```
+    /// use lsh_rs::LshSql;
+    /// use ndarray::prelude::*;
+    /// let mut lsh = LshSql::new(5, 10, 3).srp();
+    /// let vs = array![[1., 2., 3.], [4., 5., 6.]];
+    /// let ids = lsh.store_array(vs);
+    /// ```
+    pub fn store_array(&mut self, vs: ArrayView2<FloatSize>) -> Result<Vec<u32>> {
+        self.validate_vec(vs.slice(s![0, ..]).as_slice().unwrap())?;
+        self.hash_tables
+            .as_mut()
+            .unwrap()
+            .increase_storage(vs.len());
+
+        // one thread prepares hashes, while the other loads the hashes in the hashtables.
+        let (tx, rx) = unbounded();
+        let hashers = &self.hashers;
+        crossbeam::scope(|s| {
+            s.spawn(|_| {
+                vs.axis_iter(Axis(0)).for_each(|v| {
+                    for (i, proj) in hashers.iter().enumerate() {
+                        let hash = proj.hash_vec_put(v.as_slice().unwrap());
+                        tx.send((hash, v, i)).unwrap();
+                    }
+                });
+                drop(tx)
+            });
+        })
+        .expect("something went wrong in the thread that prepares the hashes.");
+
+        let mut ht = self.hash_tables.take().unwrap();
+        let mut insert_idx = Vec::with_capacity(vs.len());
+        for (hash, v, i) in rx {
+            insert_idx.push(ht.put(hash, v.as_slice().unwrap(), i)?);
+        }
+        self.hash_tables.replace(ht);
+        Ok(insert_idx)
+    }
+}
+
+impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -300,98 +392,6 @@ impl<H: 'static + VecHash + Sync, T: HashTables> LSH<T, H> {
         }
         self.hash_tables.replace(ht);
         Ok(idx)
-    }
-
-    /// Store multiple vectors in storage. Before storing the storage capacity is possibly
-    /// increased to match the data points.
-    ///
-    /// # Arguments
-    /// * `vs` - Array of data points.
-    ///
-    /// # Examples
-    ///```
-    /// use lsh_rs::LshSql;
-    /// let mut lsh = LshSql::new(5, 10, 3).srp();
-    /// let vs = &[&[2., 3., 4.],
-    ///            &[-1., -1., 1.]];
-    /// let ids = lsh.store_vecs(vs);
-    /// ```
-    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
-        self.validate_vec(&vs[0])?;
-        self.hash_tables
-            .as_mut()
-            .unwrap()
-            .increase_storage(vs.len());
-
-        // one thread prepares hashes, while the other loads the hashes in the hashtables.
-        let (tx, rx) = unbounded();
-        let hashers = &self.hashers;
-        crossbeam::scope(|s| {
-            s.spawn(|_| {
-                vs.iter().for_each(|v| {
-                    for (i, proj) in hashers.iter().enumerate() {
-                        let hash = proj.hash_vec_put(v);
-                        tx.send((hash, v, i)).unwrap();
-                    }
-                });
-                drop(tx)
-            });
-        })
-        .expect("something went wrong in the thread that prepares the hashes.");
-
-        let mut ht = self.hash_tables.take().unwrap();
-        let mut insert_idx = Vec::with_capacity(vs.len());
-        for (hash, v, i) in rx {
-            insert_idx.push(ht.put(hash, v, i)?);
-        }
-        self.hash_tables.replace(ht);
-        Ok(insert_idx)
-    }
-
-    /// Store a 2D array in storage. Before storing the storage capacity is possibly
-    /// increased to match the data points.
-    ///
-    /// # Arguments
-    /// * `vs` - Array of data points.
-    ///
-    /// # Examples
-    ///```
-    /// use lsh_rs::LshSql;
-    /// use ndarray::prelude::*;
-    /// let mut lsh = LshSql::new(5, 10, 3).srp();
-    /// let vs = array![[1., 2., 3.], [4., 5., 6.]];
-    /// let ids = lsh.store_array(vs);
-    /// ```
-    pub fn store_array(&mut self, vs: ArrayView2<FloatSize>) -> Result<Vec<u32>> {
-        self.validate_vec(vs.slice(s![0, ..]).as_slice().unwrap())?;
-        self.hash_tables
-            .as_mut()
-            .unwrap()
-            .increase_storage(vs.len());
-
-        // one thread prepares hashes, while the other loads the hashes in the hashtables.
-        let (tx, rx) = unbounded();
-        let hashers = &self.hashers;
-        crossbeam::scope(|s| {
-            s.spawn(|_| {
-                vs.axis_iter(Axis(0)).for_each(|v| {
-                    for (i, proj) in hashers.iter().enumerate() {
-                        let hash = proj.hash_vec_put(v.as_slice().unwrap());
-                        tx.send((hash, v, i)).unwrap();
-                    }
-                });
-                drop(tx)
-            });
-        })
-        .expect("something went wrong in the thread that prepares the hashes.");
-
-        let mut ht = self.hash_tables.take().unwrap();
-        let mut insert_idx = Vec::with_capacity(vs.len());
-        for (hash, v, i) in rx {
-            insert_idx.push(ht.put(hash, v.as_slice().unwrap(), i)?);
-        }
-        self.hash_tables.replace(ht);
-        Ok(insert_idx)
     }
 
     /// Update a data point in the `hash_tables`.

@@ -8,7 +8,6 @@ use rand::distributions::Uniform;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use statrs::function::factorial::binomial;
-use std::any::Any;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
@@ -17,6 +16,10 @@ use std::collections::BinaryHeap;
 /// Liv, Q., Josephson, W., Whang, L., Charikar, M., & Li, K. (n.d.).
 /// Multi-Probe LSH: Efficient Indexing for High-Dimensional Similarity Search
 /// Retrieved from https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
+
+pub trait QueryDirectedProbe {
+    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Vec<Hash>;
+}
 
 fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
     // https://stackoverflow.com/questions/196017/unique-non-repeating-random-numbers-in-o1#196065
@@ -220,8 +223,10 @@ impl L2 {
         let xi_plus1: Array1<FloatSize> = self.r - &xi_min1;
         (xi_min1, xi_plus1)
     }
+}
 
-    pub fn query_directed_probing(&self, q: &DataPointSlice, budget: usize) -> Vec<Hash> {
+impl QueryDirectedProbe for L2 {
+    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Vec<Hash> {
         // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
         // https://www.youtube.com/watch?v=c5DHtx5VxX8
         let hash = self.hash_vec_query(q);
@@ -260,45 +265,37 @@ impl L2 {
     }
 }
 
-pub trait MultiProbe {
-    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>>;
-}
-
-impl<H: VecHash + Sync + Any, T: HashTables> MultiProbe for LSH<T, H> {
-    fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>> {
-        // uses dynamic typing through runtime reflection.
-        // TODO:
-        //  use impl specialization once stable
-        //  autoref specialization was tried but did not succeed.
-        //  https://github.com/dtolnay/case-studies/blob/master/autoref-specialization/README.md
+impl<H: VecHash, T: HashTables> LSH<T, H> {
+    pub fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>> {
         self.validate_vec(v)?;
         let mut bucket_union = FnvHashSet::default();
 
-        let value_any = &self.hashers as &dyn Any;
-        match value_any.downcast_ref::<Vec<L2>>() {
-            Some(l2_hashers) => {
-                for (i, hasher) in l2_hashers.iter().enumerate() {
-                    let hashes = hasher.query_directed_probing(v, self._multi_probe_budget);
+        // Check if hasher has implemented this trait. If so follow this more specialized path.
+        // Only L2 should have implemented it. This is the trick to choose a different function
+        // path for the L2 struct.
+        if self.hashers[0].as_query_directed_probe().is_some() {
+            for (i, hasher) in self.hashers.iter().enumerate() {
+                if let Some(h) = hasher.as_query_directed_probe() {
+                    let hashes = h.query_directed_probe(v, self._multi_probe_budget);
                     for hash in hashes {
                         self.process_bucket_union_result(&hash, i, &mut bucket_union)?
                     }
                 }
             }
-            None => {
-                let probing_seq = step_wise_probing(self.n_projections, self._multi_probe_budget);
-                for (i, proj) in self.hashers.iter().enumerate() {
-                    // fist process the original query
-                    let original_hash = proj.hash_vec_query(v);
-                    self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
+        } else {
+            let probing_seq = step_wise_probing(self.n_projections, self._multi_probe_budget);
+            for (i, proj) in self.hashers.iter().enumerate() {
+                // fist process the original query
+                let original_hash = proj.hash_vec_query(v);
+                self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
 
-                    for pertub in &probing_seq {
-                        let hash = original_hash
-                            .iter()
-                            .zip(pertub)
-                            .map(|(&a, &b)| a + b)
-                            .collect();
-                        self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
-                    }
+                for pertub in &probing_seq {
+                    let hash = original_hash
+                        .iter()
+                        .zip(pertub)
+                        .map(|(&a, &b)| a + b)
+                        .collect();
+                    self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
                 }
             }
         }
@@ -347,7 +344,7 @@ mod test {
         // argsort
         let z = vec![1, 6, 0, 3, 2, 5, 7, 4];
         let switchpoint = 4;
-        let mut a0 = PerturbState::new(&z, &distances, switchpoint, vec![0, 0, 0, 0]);
+        let a0 = PerturbState::new(&z, &distances, switchpoint, vec![0, 0, 0, 0]);
         // initial selection is the first zj [0]
         // This leads to:
         //   distance/score:    0.1
@@ -384,7 +381,7 @@ mod test {
     #[test]
     fn test_query_directed_probe() {
         let l2 = L2::new(4, 4., 3, 1);
-        let hashes = l2.query_directed_probing(&[1., 2., 3., 1.], 4);
+        let hashes = l2.query_directed_probe(&[1., 2., 3., 1.], 4);
         println!("{:?}", hashes)
     }
 }
