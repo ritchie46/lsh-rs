@@ -1,10 +1,10 @@
 [package]
 name = "lsh-rs"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["ritchie46 <ritchie46@gmail.com>"]
 edition = "2018"
 license = "MIT"
-description = "LSH Approximate Nearest Neighbor Search with Locality Sensitive Hashing."
+description = "LSH: Approximate Nearest Neighbor Search with Locality Sensitive Hashing."
 repository = "https://github.com/ritchie46/lsh-rs"
 readme = "../README.md"
 
