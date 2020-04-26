@@ -98,13 +98,13 @@ macro_rules! call_lsh_types {
         };
     };
 
-    ($lsh:expr, $method_call:ident) => {
+    ($lsh:expr, $method_call:ident, $($optional:tt),*) => {
         match $lsh {
-            LshTypes::L2(lsh) => lsh.$method_call(),
-            LshTypes::L2Mem(lsh) => lsh.$method_call(),
-            LshTypes::Mips(lsh) => lsh.$method_call(),
-            LshTypes::Srp(lsh) => lsh.$method_call(),
-            LshTypes::SrpMem(lsh) => lsh.$method_call(),
+            LshTypes::L2(lsh) => {lsh.$method_call() $($optional),*},
+            LshTypes::L2Mem(lsh) => {lsh.$method_call() $($optional),*},
+            LshTypes::Mips(lsh) => {lsh.$method_call() $($optional),*},
+            LshTypes::Srp(lsh) => {lsh.$method_call() $($optional),*},
+            LshTypes::SrpMem(lsh) => {lsh.$method_call() $($optional),*},
             LshTypes::Empty => panic!("base not initialized"),
         };
     };
@@ -200,7 +200,7 @@ impl Base {
     }
 
     fn _describe(&mut self) -> IntResult<String> {
-        let s = call_lsh_types!(&mut self.lsh, describe)?;
+        let s = call_lsh_types!(&mut self.lsh, describe, )?;
         Ok(s)
     }
 
@@ -313,6 +313,16 @@ impl Base {
 
     fn increase_storage(&mut self, upper_bound: usize) -> PyResult<()> {
         self._increase_storage(upper_bound)?;
+        Ok(())
+    }
+
+    fn multi_probe(&mut self, budget: usize) -> PyResult<()> {
+        call_lsh_types!(&mut self.lsh, multi_probe, budget, ;);
+        Ok(())
+    }
+
+    fn base(&mut self) -> PyResult<()> {
+        call_lsh_types!(&mut self.lsh, base, ;);
         Ok(())
     }
 }

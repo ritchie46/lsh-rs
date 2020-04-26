@@ -337,6 +337,11 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         self
     }
 
+    pub fn base(&mut self) -> &mut Self {
+        self._multi_probe = false;
+        self
+    }
+
     /// Increase storage of the `hash_tables` backend. This can reduce system calls.
     ///
     /// # Arguments
