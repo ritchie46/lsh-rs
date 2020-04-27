@@ -1,5 +1,7 @@
 use crate::utils::create_rng;
-use crate::{DataPointSlice, FloatSize, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH};
+use crate::{
+    DataPointSlice, Error, FloatSize, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH,
+};
 use fnv::FnvHashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
@@ -18,7 +20,7 @@ use std::collections::BinaryHeap;
 /// Retrieved from https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
 
 pub trait QueryDirectedProbe {
-    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Vec<Hash>;
+    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Result<Vec<Hash>>;
 }
 
 fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
@@ -169,14 +171,23 @@ impl<'a> PerturbState<'a> {
         out
     }
 
-    fn shift(&mut self) {
-        let max = self.selection.pop().unwrap();
-        self.selection.push(max + 1);
+    fn check_bounds(&mut self, max: usize) -> Result<()> {
+        if max == self.z.len() - 1 {
+            Err(Error::Failed("Out of bounds".to_string()))
+        } else {
+            self.selection.push(max + 1);
+            Ok(())
+        }
     }
 
-    fn expand(&mut self) {
+    fn shift(&mut self) -> Result<()> {
+        let max = self.selection.pop().unwrap();
+        self.check_bounds(max)
+    }
+
+    fn expand(&mut self) -> Result<()> {
         let max = self.selection[self.selection.len() - 1];
-        self.selection.push(max + 1)
+        self.check_bounds(max)
     }
 
     fn gen_hash(&mut self) -> Hash {
@@ -226,7 +237,7 @@ impl L2 {
 }
 
 impl QueryDirectedProbe for L2 {
-    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Vec<Hash> {
+    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Result<Vec<Hash>> {
         // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
         // https://www.youtube.com/watch?v=c5DHtx5VxX8
         let hash = self.hash_vec_query(q);
@@ -251,17 +262,25 @@ impl QueryDirectedProbe for L2 {
         let a0 = PerturbState::new(&z, &distances, switchpoint, hash);
         heap.push(a0);
         for _ in 0..budget {
-            let mut ai = heap.pop().unwrap();
+            let mut ai = match heap.pop() {
+                Some(ai) => ai,
+                None => {
+                    return Err(Error::Failed(
+                        "All query directed probing combinations depleted".to_string(),
+                    ))
+                }
+            };
             let mut a_s = ai.clone();
             let mut a_e = ai.clone();
-            a_s.shift();
-            heap.push(a_s);
-            a_e.expand();
-            heap.push(a_e);
-
+            if a_s.shift().is_ok() {
+                heap.push(a_s);
+            }
+            if a_e.expand().is_ok() {
+                heap.push(a_e);
+            }
             hashes.push(ai.gen_hash())
         }
-        hashes
+        Ok(hashes)
     }
 }
 
@@ -276,7 +295,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         if self.hashers[0].as_query_directed_probe().is_some() {
             for (i, hasher) in self.hashers.iter().enumerate() {
                 if let Some(h) = hasher.as_query_directed_probe() {
-                    let hashes = h.query_directed_probe(v, self._multi_probe_budget);
+                    let hashes = h.query_directed_probe(v, self._multi_probe_budget)?;
                     for hash in hashes {
                         self.process_bucket_union_result(&hash, i, &mut bucket_union)?
                     }
@@ -381,7 +400,15 @@ mod test {
     #[test]
     fn test_query_directed_probe() {
         let l2 = L2::new(4, 4., 3, 1);
-        let hashes = l2.query_directed_probe(&[1., 2., 3., 1.], 4);
+        let hashes = l2.query_directed_probe(&[1., 2., 3., 1.], 4).unwrap();
         println!("{:?}", hashes)
+    }
+
+    #[test]
+    fn test_query_directed_bounds() {
+        // if shift and expand operation have reached the end of the vecs an error should be returned
+        let mut lsh = LshMem::new(2, 1, 1).multi_probe(1000).l2(4.).unwrap();
+        lsh.store_vec(&[1.]).unwrap();
+        assert!(lsh.query_bucket_ids(&[1.]).is_err())
     }
 }
