@@ -21,6 +21,12 @@ class Base:
         self.in_mem = in_mem
         self.log = log
 
+    def base(self):
+        self.lsh.base()
+
+    def multi_probe(self, budget):
+        self.lsh.multi_probe(budget)
+
     def describe(self):
         print(self.lsh.describe())
 
@@ -88,9 +94,14 @@ class Base:
 
         qrs = []
         idx_batch = self.lsh.query_bucket_idx_batch(X)
-        idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
-        for idx, dist, original_idx in zip(idx, dist, idx_batch):
-            n_collisions = original_idx
+        sorted_idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
+        sorted_idx = sorted_idx
+        for sorted_idx, dist, original_idx in zip(sorted_idx, dist, idx_batch):
+            original_idx = np.array(original_idx)
+            sorted_idx = np.array(sorted_idx)
+
+            n_collisions = len(original_idx)
+            idx = original_idx[sorted_idx]
             if only_index:
                 data = None
             else:
@@ -110,7 +121,7 @@ class Base:
 
 class L2(Base):
     def __init__(
-        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3", in_mem=False, log=True
+        self, n_projections, n_hash_tables, dim, r=4.0, seed=0, db_path="./lsh.db3", in_mem=True, log=True
     ):
         if in_mem:
             self.lsh_builder = LshL2Mem
@@ -136,8 +147,8 @@ class L2(Base):
         return self._predict(x, 'euclidean', only_index, top_k)
 
 
-class CosineSim(Base):
-    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_path="./lsh.db3", in_mem=False, log=True):
+class SRP(Base):
+    def __init__(self, n_projections, n_hash_tables, dim, seed=0, db_path="./lsh.db3", in_mem=True, log=True):
         if in_mem:
             self.lsh_builder = LshSrpMem
         else:
@@ -148,7 +159,7 @@ class CosineSim(Base):
     def reset(self):
         self.clean()
         self.lsh = self.lsh_builder(
-            self.n_projection, self.n_hash_tables, self.dim, self.db_path, self.seed
+            self.n_projection, self.n_hash_tables, self.dim, self.seed, self.db_path
         )
 
     def predict(self, x, only_index=False, top_k=5):
