@@ -200,7 +200,7 @@ impl Base {
     }
 
     fn _describe(&mut self) -> IntResult<String> {
-        let s = call_lsh_types!(&mut self.lsh, describe, )?;
+        let s = call_lsh_types!(&mut self.lsh, describe,)?;
         Ok(s)
     }
 
