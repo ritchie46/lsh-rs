@@ -1,6 +1,5 @@
 from .floky import LshL2, LshSrp, LshSrpMem, LshL2Mem, sort_by_distances
 from tqdm import tqdm
-from scipy.spatial.distance import cdist
 import numpy as np
 import os
 from collections import namedtuple
@@ -232,12 +231,14 @@ class Base:
         qrs = []
         idx_batch = self.lsh.query_bucket_idx_batch(X)
         sorted_idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
-        sorted_idx = sorted_idx
         for sorted_idx, dist, original_idx in zip(sorted_idx, dist, idx_batch):
+            if len(sorted_idx) == 0:
+                qrs.append(QueryResult([], [], 0, []))
+                continue
             original_idx = np.array(original_idx)
             sorted_idx = np.array(sorted_idx)
-
             n_collisions = len(original_idx)
+
             idx = original_idx[sorted_idx]
             if only_index:
                 data = None

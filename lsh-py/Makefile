@@ -14,3 +14,6 @@ uninstall:
 
 clean: uninstall
 	@-rm wheels/*
+
+pytest:
+	@cd test && pytest
