@@ -6,3 +6,4 @@ Cargo.lock
 *.db3*
 wheels/
 data/
+__pycache__/

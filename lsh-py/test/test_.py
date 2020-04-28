@@ -47,7 +47,7 @@ def test_srp():
     dim = 10
 
     arr = np.random.randn(N, dim)
-    lsh = SRP(n_projections=10, n_hash_tables=1, log=False, seed=1)
+    lsh = SRP(n_projections=19, n_hash_tables=10, log=False, seed=1)
     lsh.fit(arr)
     query = np.random.randn(n, dim)
     results = lsh.predict(query)
