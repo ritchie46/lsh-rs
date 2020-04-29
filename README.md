@@ -9,6 +9,8 @@ For more information on the subject see:
 * [Section 2. describes the hash families used in this crate](https://arxiv.org/pdf/1411.3787.pdf)
 * [LSH and neural networks](https://www.ritchievink.com/blog/2020/04/07/sparse-neural-networks-and-hash-tables-with-locality-sensitive-hashing/)
 
+[Read the Python docs](https://lsh-rs.readthedocs.io/en/latest/) for the Python bindings.
+
 ## Implementations
 
 * **Base LSH**
@@ -107,3 +109,28 @@ The [LSH struct](struct.LSH.html) is exposed with multiple backends that store t
 * in memory (fastest / can save state with serialization) [LshMem](type.LshMem.html)
 * SQLite (slower due to disk io, but automatic state preservation between sessions) [LshSql](type.LshSql.html)
 * in memory SQLite (can backup to SQLite when processing is done) [LshSqlMem](type.LshSqlMem.html)
+
+## Python
+At the moment, the Python bindings are only compiled for Linux x86_64 systems.
+
+`$ pip install floky`
+
+```python
+from floky import SRP
+import numpy as np
+
+N = 10000
+n = 100
+dim = 10
+
+# Generate some random data points
+data_points = np.random.randn(N, dim)
+
+# Do a one time (expensive) fit.
+lsh = SRP(n_projections=19, n_hash_tables=10)
+lsh.fit(data_points)
+
+# Query approximated nearest neigbors in sub-linear time
+query = np.random.randn(n, dim)
+results = lsh.predict(query)
+```
