@@ -3,6 +3,10 @@ cache: cargo
 os: linux
 dist: xenial
 
+branches:
+  except:
+    - docs
+
 env:
   global:
       - secure: HUwB7YDEJP1KuOOdYpQN/L4/nxnqzkrDe7ECY/TURjdA/HV/TQl5h7dZajET00Wg+MeGrS8ZQViqN6Vdo2i7DKucqef+ZXNhKCztmRnK6eD1t4a2Fp6+vxjQQXzNz4MOXCWAmkYlkJb85KBPTSyWGmPsL2WljMFj0HrB/feSRV1sk5lpdvxyO+KSWmTGAr/f/S+czu/m7c2FUWHjcoPktviIhlhnXMQtMfKcvDiHCKEyuDFvN1R9VSbSl4KhnGyAwi6p7O3IK6tnr9piTHNl9bDGC8/5pYEP8etjMAubvcBrsKoiCw3PaHoUOj9OiRlEz67SEQvlKn1lQoktNF+fPxEnx+9z4dTD1u/uQ8FJfYiVbxg/D0lHcl8+EuBc3IfWoHygWgYUz9NjfPuSVXeROgk5p6xxt5BYwpfdTmYKdcpnCZEVzW/WEuqm8DjyDhFMEke8Wzp/KCdVEV+jtWNK6WNegzWZACXO7Hjmt9vxH0R2iXFA8HA14PWM4m5jMeineUf+I3HWF+a1pe1P2jSMXJHwCPbxEyVPCDYlsrYyJXn4C8yAzOgpLD4+x1jv+075I0b7WbjF9ZVegfhrq01VbD09hRygGEp6HZE86AriX6BcxT4HlaefkttHC4iCfdYIorpxEw7DaEx0SNgx2SG6ijdfCjMeARQ8EQFhvybKOsE=
