@@ -12,6 +12,8 @@ Welcome to floky's documentation!
 
    sections/getting_started
    sections/installation
+   sections/lsh
+   sections/LSH_recall.ipynb
    sections/reference
 
 

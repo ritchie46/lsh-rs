@@ -7,3 +7,4 @@ Cargo.lock
 wheels/
 data/
 __pycache__/
+.ipynb_checkpoints/
