@@ -99,7 +99,7 @@ performance. To make use of BLAS, install `lsh-rs` w/ `"blas"` feature and reins
  <br>
 **Cargo.toml:**
 ```toml
-lsh-rs = {version ="x.x"}, features=["blas"]}
+lsh-rs = {version ="x.x", features=["blas"]}
 ndarray = {version = "0.13", features=["blas"]}
 # Or any other blas backend.
 blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}
