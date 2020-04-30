@@ -24,3 +24,5 @@ crate-type = ["cdylib"]
 [package.metadata.maturin]
 requires-dist = ["tqdm~=4.40.0", "scipy", "numpy"]
 
+[profile.release]
+lto = true

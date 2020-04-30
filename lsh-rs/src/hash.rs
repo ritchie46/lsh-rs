@@ -40,16 +40,12 @@ impl SignRandomProjections {
     }
 
     fn hash_vec(&self, v: &[f32]) -> Hash {
-        let mut hash: Hash = vec![0; self.hyperplanes.len_of(Axis(1))];
-
         let v = aview1(v);
-
-        for (i, ai) in self.hyperplanes.t().dot(&v).iter().enumerate() {
-            if ai > &0.0 {
-                hash[i] = 1
-            }
-        }
-        hash.into_iter().collect()
+        self.hyperplanes
+            .t()
+            .dot(&v)
+            .mapv(|ai| if ai > 0. { 1 } else { 0 })
+            .to_vec()
     }
 }
 

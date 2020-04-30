@@ -49,7 +49,8 @@ pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<HashPrimitive> 
     let mut rng = create_rng(0);
     for i in candidate_idx {
         let v = *shift_options.choose(&mut rng).unwrap();
-        permut[i] += v
+        // bounds check not needed as i cannot be larger than permut
+        unsafe { *permut.get_unchecked_mut(i) += v }
     }
     permut
 }
