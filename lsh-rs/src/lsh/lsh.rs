@@ -1,4 +1,5 @@
 use crate::{
+    data::Numeric,
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     utils::create_rng,
@@ -16,9 +17,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
-pub type LshSql<H> = LSH<SqlTable, H>;
-pub type LshSqlMem<H> = LSH<SqlTableMem, H>;
-pub type LshMem<H> = LSH<MemoryTable, H>;
+pub type LshSql<N, H> = LSH<N, SqlTable, H>;
+pub type LshSqlMem<N, H> = LSH<N, SqlTableMem, H>;
+pub type LshMem<N, H> = LSH<N, MemoryTable, H>;
 
 /// Wrapper for LSH functionality.
 /// Can be initialized following the Builder pattern.
@@ -42,7 +43,7 @@ pub type LshMem<H> = LSH<MemoryTable, H>;
 /// * [set_database_file](struct.LSH.html#method.set_database_file)
 /// * [multi_probe](struct.LSH.html#method.multi_probe)
 /// * [increase_storage](struct.LSH.html#method.increase_storage)
-pub struct LSH<T: HashTables, H: VecHash> {
+pub struct LSH<N: Numeric, T: HashTables, H: VecHash> {
     /// Number of hash tables. `L` in literature.
     pub n_hash_tables: usize,
     /// Number of hash functions. `K` in literature.
@@ -61,13 +62,14 @@ pub struct LSH<T: HashTables, H: VecHash> {
     /// multi probe budget
     pub(crate) _multi_probe_budget: usize,
     _db_path: String,
+    _type: Option<N>,
 }
 
 /// Create a new LSH instance. Used in the builder pattern
-fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
-    lsh: &mut LSH<T, H>,
+fn lsh_from_lsh<N: Numeric, T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
+    lsh: &mut LSH<N, T, H>,
     hashers: Vec<H>,
-) -> Result<LSH<T, H>> {
+) -> Result<LSH<N, T, H>> {
     let mut ht = *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_path)?;
 
     // Load hashers if store hashers fails. (i.e. exists)
@@ -89,11 +91,12 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
         _multi_probe: lsh._multi_probe,
         _multi_probe_budget: lsh._multi_probe_budget,
         _db_path: lsh._db_path.clone(),
+        _type: None,
     };
     Ok(lsh)
 }
 
-impl<T: HashTables> LSH<T, SignRandomProjections> {
+impl<N: Numeric, T: HashTables> LSH<N, T, SignRandomProjections> {
     /// Create a new SignRandomProjections LSH
     pub fn srp(&mut self) -> Result<Self> {
         let mut rng = create_rng(self._seed);
@@ -108,7 +111,7 @@ impl<T: HashTables> LSH<T, SignRandomProjections> {
     }
 }
 
-impl<T: HashTables> LSH<T, L2> {
+impl<N: Numeric, T: HashTables> LSH<N, T, L2> {
     /// Create a new L2 LSH
     ///
     /// See hash function:
@@ -132,7 +135,7 @@ impl<T: HashTables> LSH<T, L2> {
     }
 }
 
-impl<T: HashTables> LSH<T, MIPS> {
+impl<N: Numeric, T: HashTables> LSH<N, T, MIPS> {
     /// Create a new MIPS LSH
     ///
     /// Async hasher
@@ -158,7 +161,7 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
+impl<N: Numeric, H: VecHash + Sync, T: HashTables + Sync> LSH<N, T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
     /// # Arguments
@@ -184,7 +187,7 @@ impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     }
 }
 
-impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
+impl<N: Numeric, H: VecHash + Sync, T: HashTables> LSH<N, T, H> {
     /// Store multiple vectors in storage. Before storing the storage capacity is possibly
     /// increased to match the data points.
     ///
@@ -278,7 +281,7 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     }
 }
 
-impl<H: VecHash, T: HashTables> LSH<T, H> {
+impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -299,6 +302,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             _multi_probe: false,
             _multi_probe_budget: 16,
             _db_path: "./lsh.db3".to_string(),
+            _type: None,
         };
         lsh
     }
@@ -522,7 +526,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     }
 }
 
-impl<T: VecHash + Serialize> LSH<SqlTable, T> {
+impl<N: Numeric, T: VecHash + Serialize> LSH<N, SqlTable, T> {
     /// Commit SqlTable backend
     pub fn commit(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
@@ -550,9 +554,10 @@ struct IntermediatBlob {
     _seed: u64,
 }
 
-impl<H> LSH<MemoryTable, H>
+impl<N, H> LSH<N, MemoryTable, H>
 where
     H: Serialize + DeserializeOwned + VecHash,
+    N: Numeric,
 {
     /// Deserialize MemoryTable backend
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {

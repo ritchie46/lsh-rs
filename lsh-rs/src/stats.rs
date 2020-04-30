@@ -55,7 +55,7 @@ pub struct OptRes {
 }
 
 fn lsh_to_result<T: 'static + VecHash + Send + Sync + Clone>(
-    lsh: LshMem<T>,
+    lsh: LshMem<f32, T>,
     vs: &[DataPoint],
     k: usize,
     l: usize,

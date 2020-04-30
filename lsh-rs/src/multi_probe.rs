@@ -1,3 +1,4 @@
+use crate::data::Numeric;
 use crate::utils::create_rng;
 use crate::{
     DataPointSlice, Error, FloatSize, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH,
@@ -285,7 +286,7 @@ impl QueryDirectedProbe for L2 {
     }
 }
 
-impl<H: VecHash, T: HashTables> LSH<T, H> {
+impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     pub fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>> {
         self.validate_vec(v)?;
         let mut bucket_union = FnvHashSet::default();
