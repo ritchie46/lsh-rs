@@ -8,6 +8,7 @@ use crate::{
 use crate::{DataPoint, DataPointSlice, SqlTable};
 use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
+use itertools::Itertools;
 use ndarray::prelude::*;
 use rand::Rng;
 use rayon::prelude::*;
@@ -166,7 +167,7 @@ impl<N: Numeric, H: VecHash + Sync, T: HashTables + Sync> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch_par(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch_par(&self, vs: &[Vec<N>]) -> Result<Vec<Vec<u32>>> {
         vs.into_par_iter()
             .map(|v| self.query_bucket_ids(v))
             .collect()
@@ -176,10 +177,7 @@ impl<N: Numeric, H: VecHash + Sync, T: HashTables + Sync> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch_arr_par(
-        &self,
-        vs: ArrayView2<FloatSize>,
-    ) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch_arr_par(&self, vs: ArrayView2<N>) -> Result<Vec<Vec<u32>>> {
         vs.axis_iter(Axis(0))
             .into_par_iter()
             .map(|v| self.query_bucket_ids(v.as_slice().unwrap()))
@@ -202,7 +200,16 @@ impl<N: Numeric, H: VecHash + Sync, T: HashTables> LSH<N, T, H> {
     ///            &[-1., -1., 1.]];
     /// let ids = lsh.store_vecs(vs);
     /// ```
-    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
+    pub fn store_vecs(&mut self, vs: &[Vec<N>]) -> Result<Vec<u32>> {
+        let a = vs
+            .into_iter()
+            .map(|v| {
+                let v = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
+                v
+            })
+            .collect_vec();
+        let vs = &a;
+
         self.validate_vec(&vs[0])?;
         self.hash_tables
             .as_mut()
@@ -248,7 +255,10 @@ impl<N: Numeric, H: VecHash + Sync, T: HashTables> LSH<N, T, H> {
     /// let vs = array![[1., 2., 3.], [4., 5., 6.]];
     /// let ids = lsh.store_array(vs);
     /// ```
-    pub fn store_array(&mut self, vs: ArrayView2<FloatSize>) -> Result<Vec<u32>> {
+    pub fn store_array(&mut self, vs: ArrayView2<N>) -> Result<Vec<u32>> {
+        // TODO: remove
+        let a = vs.to_owned();
+        let vs = &a.map(|v| v.to_f32().unwrap());
         self.validate_vec(vs.slice(s![0, ..]).as_slice().unwrap())?;
         self.hash_tables
             .as_mut()
@@ -307,7 +317,7 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
         lsh
     }
 
-    pub(crate) fn validate_vec(&self, v: &DataPointSlice) -> Result<()> {
+    pub(crate) fn validate_vec<A>(&self, v: &[A]) -> Result<()> {
         if !(v.len() == self.dim) {
             return Err(Error::Failed(
                 "data point is not valid, are the dimensions correct?".to_string(),
@@ -390,7 +400,9 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     /// let v = &[2., 3., 4.];
     /// let id = lsh.store_vec(v);
     /// ```
-    pub fn store_vec(&mut self, v: &DataPointSlice) -> Result<u32> {
+    pub fn store_vec(&mut self, v: &[N]) -> Result<u32> {
+        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
+        let v = &a;
         self.validate_vec(v)?;
 
         let mut idx = 0;
@@ -409,12 +421,19 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     /// * `idx` - Id of the hash that needs to be updated.
     /// * `new_v` - New data point that needs to be hashed.
     /// * `old_v` - Old data point. Needed to remove the old hash.
-    pub fn update_by_idx(
-        &mut self,
-        idx: u32,
-        new_v: &DataPointSlice,
-        old_v: &DataPointSlice,
-    ) -> Result<()> {
+    pub fn update_by_idx(&mut self, idx: u32, new_v: &[N], old_v: &[N]) -> Result<()> {
+        // TODO: delete
+        let a = new_v
+            .into_iter()
+            .map(|&v| v.to_f32().unwrap())
+            .collect_vec();
+        let new_v = &a;
+
+        let b = old_v
+            .into_iter()
+            .map(|&v| v.to_f32().unwrap())
+            .collect_vec();
+        let old_v = &b;
         let mut ht = self.hash_tables.take().unwrap();
         for (i, proj) in self.hashers.iter().enumerate() {
             let new_hash = proj.hash_vec_put(new_v);
@@ -425,7 +444,10 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
         Ok(())
     }
 
-    fn query_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
+    fn query_bucket_union(&self, v: &[N]) -> Result<HashSet<u32>> {
+        // TODO: delete
+        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
+        let v = &a;
         self.validate_vec(v)?;
         if self._multi_probe {
             return self.multi_probe_bucket_union(v);
@@ -445,8 +467,10 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket(&self, v: &DataPointSlice) -> Result<Vec<&DataPoint>> {
-        self.validate_vec(v)?;
+    pub fn query_bucket(&self, v: &[N]) -> Result<Vec<&DataPoint>> {
+        // TODO: delete
+        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
+        self.validate_vec(&a)?;
         if self.only_index_storage {
             return Err(Error::Failed(
                 "cannot query bucket, use query_bucket_ids".to_string(),
@@ -465,8 +489,10 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Result<Vec<u32>> {
-        self.validate_vec(v)?;
+    pub fn query_bucket_ids(&self, v: &[N]) -> Result<Vec<u32>> {
+        // TODO: delete
+        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
+        self.validate_vec(&a)?;
         let bucket_union = self.query_bucket_union(v)?;
         Ok(bucket_union.iter().copied().collect())
     }
@@ -475,7 +501,7 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch(&self, vs: &[Vec<N>]) -> Result<Vec<Vec<u32>>> {
         vs.iter().map(|v| self.query_bucket_ids(v)).collect()
     }
 
@@ -483,7 +509,7 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch_arr(&self, vs: ArrayView2<FloatSize>) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch_arr(&self, vs: ArrayView2<N>) -> Result<Vec<Vec<u32>>> {
         vs.axis_iter(Axis(0))
             .map(|v| self.query_bucket_ids(v.as_slice().unwrap()))
             .collect()
@@ -493,7 +519,10 @@ impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `v` - Data point
-    pub fn delete_vec(&mut self, v: &DataPointSlice) -> Result<()> {
+    pub fn delete_vec(&mut self, v: &[N]) -> Result<()> {
+        // TODO: delete
+        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
+        let v = &a;
         self.validate_vec(v)?;
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
