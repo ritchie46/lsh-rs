@@ -47,12 +47,12 @@ pub trait HashTables {
     }
 
     // Should fail if hashers already stored.
-    fn store_hashers<H: VecHash + Serialize>(&mut self, _hashers: &[H]) -> Result<()> {
+    fn store_hashers<N, H: VecHash<N> + Serialize>(&mut self, _hashers: &[H]) -> Result<()> {
         Ok(())
     }
 
     // If store_hashers fails, load_hasher can be executed
-    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> Result<Vec<H>> {
+    fn load_hashers<N, H: VecHash<N> + DeserializeOwned>(&self) -> Result<Vec<H>> {
         // just chose an error to make a default trait implementation
         Err(Error::NotImplemented)
     }

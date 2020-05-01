@@ -304,7 +304,7 @@ WHERE type='table' AND type LIKE '%hash%';"#,
         Ok(out)
     }
 
-    fn store_hashers<H: VecHash + Serialize>(&mut self, hashers: &[H]) -> Result<()> {
+    fn store_hashers<N, H: VecHash<N> + Serialize>(&mut self, hashers: &[H]) -> Result<()> {
         let buf: Vec<u8> = bincode::serialize(hashers)?;
 
         // fails if already exists
@@ -324,7 +324,7 @@ WHERE type='table' AND type LIKE '%hash%';"#,
         Ok(())
     }
 
-    fn load_hashers<H: VecHash + DeserializeOwned>(&self) -> Result<Vec<H>> {
+    fn load_hashers<N, H: VecHash<N> + DeserializeOwned>(&self) -> Result<Vec<H>> {
         let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
         let buf: Vec<u8> = stmt.query_row(NO_PARAMS, |row| {
             let v: Vec<u8> = row.get_unwrap(0);

@@ -20,8 +20,8 @@ use std::collections::BinaryHeap;
 /// Multi-Probe LSH: Efficient Indexing for High-Dimensional Similarity Search
 /// Retrieved from https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
 
-pub trait QueryDirectedProbe {
-    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Result<Vec<Hash>>;
+pub trait QueryDirectedProbe<N> {
+    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Hash>>;
 }
 
 fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
@@ -238,7 +238,7 @@ impl L2 {
     }
 }
 
-impl QueryDirectedProbe for L2 {
+impl<N: Numeric> QueryDirectedProbe<N> for L2 {
     fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Result<Vec<Hash>> {
         // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
         // https://www.youtube.com/watch?v=c5DHtx5VxX8
@@ -286,8 +286,8 @@ impl QueryDirectedProbe for L2 {
     }
 }
 
-impl<N: Numeric, H: VecHash, T: HashTables> LSH<N, T, H> {
-    pub fn multi_probe_bucket_union(&self, v: &DataPointSlice) -> Result<FnvHashSet<u32>> {
+impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
+    pub fn multi_probe_bucket_union(&self, v: &[N]) -> Result<FnvHashSet<u32>> {
         self.validate_vec(v)?;
         let mut bucket_union = FnvHashSet::default();
 
