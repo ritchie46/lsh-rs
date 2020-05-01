@@ -4,6 +4,7 @@ use crate::{
     table::general::{Bucket, HashTables},
     utils::{all_eq, increase_capacity},
     DataPoint, DataPointSlice, Error, Result,
+    data::Numeric,
 };
 use fnv::{FnvHashMap as HashMap, FnvHashSet};
 use serde::{Deserialize, Serialize};
@@ -12,21 +13,21 @@ use std::iter::FromIterator;
 /// Indexible vector storage.
 /// indexes will be stored in hashtables. The original vectors can be looked up in this data structure.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct VecStore {
-    pub map: Vec<DataPoint>,
+pub struct VecStore<N> {
+    pub map: Vec<Vec<N>>,
 }
 
-impl VecStore {
-    fn push(&mut self, d: DataPoint) -> u32 {
+impl<N: Numeric> VecStore<N> {
+    fn push(&mut self, d: Vec<N>) -> u32 {
         self.map.push(d);
         (self.map.len() - 1) as u32
     }
 
-    fn position(&self, d: &DataPointSlice) -> Option<u32> {
+    fn position(&self, d: &[N]) -> Option<u32> {
         self.map.iter().position(|x| all_eq(x, d)).map(|x| x as u32)
     }
 
-    fn get(&self, idx: u32) -> &DataPoint {
+    fn get(&self, idx: u32) -> &Vec<N> {
         &self.map[idx as usize]
     }
 
@@ -37,15 +38,15 @@ impl VecStore {
 
 /// In memory backend for [LSH](struct.LSH.html).
 #[derive(Deserialize, Serialize)]
-pub struct MemoryTable {
+pub struct MemoryTable<N> {
     hash_tables: Vec<HashMap<Hash, Bucket>>,
     n_hash_tables: usize,
-    pub vec_store: VecStore,
+    pub vec_store: VecStore<N>,
     only_index_storage: bool,
     counter: u32,
 }
 
-impl MemoryTable {
+impl<N> MemoryTable<N> {
     fn remove_idx(&mut self, idx: u32, hash: &Hash, hash_table: usize) -> Result<()> {
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.get_mut(hash);
@@ -64,7 +65,7 @@ impl MemoryTable {
     }
 }
 
-impl HashTables for MemoryTable {
+impl<N: Numeric> HashTables<N> for MemoryTable<N> {
     fn new(n_hash_tables: usize, only_index_storage: bool, _: &str) -> Result<Box<Self>> {
         // TODO: Check the average number of vectors in the buckets.
         // this way the capacity can be approximated by the number of DataPoints that will
@@ -81,7 +82,7 @@ impl HashTables for MemoryTable {
         Ok(Box::new(m))
     }
 
-    fn put(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<u32> {
+    fn put(&mut self, hash: Hash, d: &[N], hash_table: usize) -> Result<u32> {
         // Store hash and id/idx
         let idx = self.counter;
         self.insert_idx(idx, hash, hash_table);
@@ -98,7 +99,7 @@ impl HashTables for MemoryTable {
     }
 
     /// Expensive operation we need to do a linear search over all datapoints
-    fn delete(&mut self, hash: &Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
+    fn delete(&mut self, hash: &Hash, d: &[N], hash_table: usize) -> Result<()> {
         // First find the data point in the VecStore
         let idx = match self.vec_store.position(d) {
             None => return Ok(()),
@@ -130,7 +131,7 @@ impl HashTables for MemoryTable {
         }
     }
 
-    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint> {
+    fn idx_to_datapoint(&self, idx: u32) -> Result<&Vec<N>> {
         Ok(self.vec_store.get(idx))
     }
 
@@ -196,7 +197,7 @@ impl HashTables for MemoryTable {
     }
 }
 
-impl std::fmt::Debug for MemoryTable {
+impl<N> std::fmt::Debug for MemoryTable<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "hash_tables:\nhash, \t buckets\n")?;
         for ht in self.hash_tables.iter() {

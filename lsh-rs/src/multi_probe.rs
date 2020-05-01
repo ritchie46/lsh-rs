@@ -286,7 +286,7 @@ impl<N: Numeric> QueryDirectedProbe<N> for L2 {
     }
 }
 
-impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
     pub fn multi_probe_bucket_union(&self, v: &[N]) -> Result<FnvHashSet<u32>> {
         self.validate_vec(v)?;
         let mut bucket_union = FnvHashSet::default();

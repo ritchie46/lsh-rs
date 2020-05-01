@@ -20,7 +20,7 @@ use std::path::Path;
 
 pub type LshSql<N, H> = LSH<N, SqlTable, H>;
 pub type LshSqlMem<N, H> = LSH<N, SqlTableMem, H>;
-pub type LshMem<N, H> = LSH<N, MemoryTable, H>;
+pub type LshMem<N, H> = LSH<N, MemoryTable<N>, H>;
 
 /// Wrapper for LSH functionality.
 /// Can be initialized following the Builder pattern.
@@ -44,7 +44,7 @@ pub type LshMem<N, H> = LSH<N, MemoryTable, H>;
 /// * [set_database_file](struct.LSH.html#method.set_database_file)
 /// * [multi_probe](struct.LSH.html#method.multi_probe)
 /// * [increase_storage](struct.LSH.html#method.increase_storage)
-pub struct LSH<N: Numeric, T: HashTables, H: VecHash<N>> {
+pub struct LSH<N: Numeric, T: HashTables<N>, H: VecHash<N>> {
     /// Number of hash tables. `L` in literature.
     pub n_hash_tables: usize,
     /// Number of hash functions. `K` in literature.
@@ -70,7 +70,7 @@ pub struct LSH<N: Numeric, T: HashTables, H: VecHash<N>> {
 /// Create a new LSH instance. Used in the builder pattern
 fn lsh_from_lsh<
     N: Numeric + DeserializeOwned,
-    T: HashTables,
+    T: HashTables<N>,
     H: VecHash<N> + Serialize + DeserializeOwned,
 >(
     lsh: &mut LSH<N, T, H>,
@@ -102,7 +102,7 @@ fn lsh_from_lsh<
     Ok(lsh)
 }
 
-impl<N: Numeric + DeserializeOwned, T: HashTables> LSH<N, T, SignRandomProjections<N>> {
+impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, SignRandomProjections<N>> {
     /// Create a new SignRandomProjections LSH
     pub fn srp(&mut self) -> Result<Self> {
         let mut rng = create_rng(self._seed);
@@ -117,7 +117,7 @@ impl<N: Numeric + DeserializeOwned, T: HashTables> LSH<N, T, SignRandomProjectio
     }
 }
 
-impl<N: Numeric + DeserializeOwned, T: HashTables> LSH<N, T, L2> {
+impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2> {
     /// Create a new L2 LSH
     ///
     /// See hash function:
@@ -141,7 +141,7 @@ impl<N: Numeric + DeserializeOwned, T: HashTables> LSH<N, T, L2> {
     }
 }
 
-impl<N: Numeric + DeserializeOwned, T: HashTables> LSH<N, T, MIPS> {
+impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS> {
     /// Create a new MIPS LSH
     ///
     /// Async hasher
@@ -167,7 +167,7 @@ impl<N: Numeric + DeserializeOwned, T: HashTables> LSH<N, T, MIPS> {
     }
 }
 
-impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables + Sync> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<N, T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
     /// # Arguments
@@ -190,7 +190,7 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables + Sync> LSH<N, T, H> {
     }
 }
 
-impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
     /// Store multiple vectors in storage. Before storing the storage capacity is possibly
     /// increased to match the data points.
     ///
@@ -231,8 +231,6 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables> LSH<N, T, H> {
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
         for (hash, v, i) in rx {
-            // TODO: delete
-            let v = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
             insert_idx.push(ht.put(hash, &v, i)?);
         }
         self.hash_tables.replace(ht);
@@ -279,9 +277,6 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables> LSH<N, T, H> {
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
         for (hash, v, i) in rx {
-            // TODO: remove
-            let a = v.to_owned();
-            let v = &a.map(|v| v.to_f32().unwrap());
             insert_idx.push(ht.put(hash, v.as_slice().unwrap(), i)?);
         }
         self.hash_tables.replace(ht);
@@ -289,7 +284,7 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables> LSH<N, T, H> {
     }
 }
 
-impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -405,8 +400,6 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
         let mut ht = self.hash_tables.take().unwrap();
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_put(v);
-            // TODO: delete
-            let v = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
             idx = ht.put(hash, &v, i)?;
         }
         self.hash_tables.replace(ht);
@@ -450,10 +443,8 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket(&self, v: &[N]) -> Result<Vec<&DataPoint>> {
-        // TODO: delete
-        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
-        self.validate_vec(&a)?;
+    pub fn query_bucket(&self, v: &[N]) -> Result<Vec<&Vec<N>>> {
+        self.validate_vec(v)?;
         if self.only_index_storage {
             return Err(Error::Failed(
                 "cannot query bucket, use query_bucket_ids".to_string(),
@@ -473,9 +464,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
     /// # Arguments
     /// * `v` - Query vector
     pub fn query_bucket_ids(&self, v: &[N]) -> Result<Vec<u32>> {
-        // TODO: delete
-        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
-        self.validate_vec(&a)?;
+        self.validate_vec(v)?;
         let bucket_union = self.query_bucket_union(v)?;
         Ok(bucket_union.iter().copied().collect())
     }
@@ -503,13 +492,11 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables> LSH<N, T, H> {
     /// # Arguments
     /// * `v` - Data point
     pub fn delete_vec(&mut self, v: &[N]) -> Result<()> {
-        // TODO: delete
-        let a = v.into_iter().map(|&v| v.to_f32().unwrap()).collect_vec();
         self.validate_vec(v)?;
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
             let mut ht = self.hash_tables.take().unwrap();
-            ht.delete(&hash, &a, i).unwrap_or_default();
+            ht.delete(&hash, v, i).unwrap_or_default();
             self.hash_tables = Some(ht)
         }
         Ok(())
@@ -565,7 +552,7 @@ struct IntermediatBlob {
     _seed: u64,
 }
 
-impl<N, H> LSH<N, MemoryTable, H>
+impl<N, H> LSH<N, MemoryTable<N>, H>
 where
     H: Serialize + DeserializeOwned + VecHash<N>,
     N: Numeric + DeserializeOwned,

@@ -1,6 +1,7 @@
 use crate::{
     hash::{Hash, HashPrimitive},
     DataPoint, DataPointSlice, Error, Result, VecHash,
+    data::Numeric,
 };
 use fnv::{FnvHashSet as HashSet, FnvHashSet};
 use serde::{de::DeserializeOwned, Serialize};
@@ -9,7 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 pub type Bucket = HashSet<u32>;
 
 /// Hashtable consisting of `L` Hash tables.
-pub trait HashTables {
+pub trait HashTables<N: Numeric> {
     fn new(n_hash_tables: usize, only_index_storage: bool, db_path: &str) -> Result<Box<Self>>;
 
     /// # Arguments
@@ -17,9 +18,9 @@ pub trait HashTables {
     /// * `hash` - hashed vector.
     /// * `d` - Vector to store in the buckets.
     /// * `hash_table` - Number of the hash_table to store the vector. Ranging from 0 to L.
-    fn put(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<u32>;
+    fn put(&mut self, hash: Hash, d: &[N], hash_table: usize) -> Result<u32>;
 
-    fn delete(&mut self, _hash: &Hash, _d: &DataPointSlice, _hash_table: usize) -> Result<()> {
+    fn delete(&mut self, _hash: &Hash, _d: &[N], _hash_table: usize) -> Result<()> {
         Err(Error::NotImplemented)
     }
 
@@ -36,7 +37,7 @@ pub trait HashTables {
     /// Query the whole bucket
     fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket>;
 
-    fn idx_to_datapoint(&self, _idx: u32) -> Result<&DataPoint> {
+    fn idx_to_datapoint(&self, _idx: u32) -> Result<&Vec<N>> {
         Err(Error::NotImplemented)
     }
 
@@ -47,12 +48,12 @@ pub trait HashTables {
     }
 
     // Should fail if hashers already stored.
-    fn store_hashers<N, H: VecHash<N> + Serialize>(&mut self, _hashers: &[H]) -> Result<()> {
+    fn store_hashers<H: VecHash<N> + Serialize>(&mut self, _hashers: &[H]) -> Result<()> {
         Ok(())
     }
 
     // If store_hashers fails, load_hasher can be executed
-    fn load_hashers<N, H: VecHash<N> + DeserializeOwned>(&self) -> Result<Vec<H>> {
+    fn load_hashers<H: VecHash<N> + DeserializeOwned>(&self) -> Result<Vec<H>> {
         // just chose an error to make a default trait implementation
         Err(Error::NotImplemented)
     }
