@@ -5,7 +5,8 @@ use crate::{
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
-use num::Zero;
+use num::traits::NumCast;
+use num::{Float, Zero};
 use serde::{Deserialize, Serialize};
 
 pub type HashPrimitive = i8;
@@ -34,7 +35,7 @@ impl<N: Numeric> SignRandomProjections<N> {
     ///
     /// * `k` - Number of hyperplanes used for determining the hash.
     /// This will also be the hash length.
-    pub fn new(k: usize, dim: usize, seed: u64) -> SignRandomProjections<N> {
+    pub fn new(k: usize, dim: usize, seed: u64) -> Self {
         let mut rng = create_rng(seed);
         let hp: Array2<f32> = Array::random_using((dim, k), StandardNormal, &mut rng);
         let hp = hp.mapv(|v| N::from_f32(v).unwrap());
@@ -62,56 +63,64 @@ impl<N: Numeric> VecHash<N> for SignRandomProjections<N> {
     }
 }
 
-// /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct L2 {
-//     pub a: Array2<f32>,
-//     pub r: f32,
-//     pub b: Array1<f32>,
-//     n_projections: usize,
-// }
-//
-// impl L2 {
-//     pub fn new(dim: usize, r: f32, n_projections: usize, seed: u64) -> L2 {
-//         let mut rng = create_rng(seed);
-//         let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
-//         let uniform_dist = Uniform::new(0., r);
-//         let b = Array::random_using(n_projections, uniform_dist, &mut rng);
-//
-//         L2 {
-//             a,
-//             r,
-//             b,
-//             n_projections,
-//         }
-//     }
-//
-//     pub(crate) fn hash_vec(&self, v: &DataPointSlice) -> Array1<FloatSize> {
-//         ((self.a.dot(&aview1(v)) + &self.b) / self.r).mapv(|x| x.floor())
-//     }
-//
-//     fn hash_and_cast_vec(&self, v: &[f32]) -> Hash {
-//         // not DRY. we don't call hash_vec to save function call.
-//         ((self.a.dot(&aview1(v)) + &self.b) / self.r)
-//             .mapv(|x| x.floor() as HashPrimitive)
-//             .to_vec()
-//     }
-// }
-//
-// impl VecHash for L2 {
-//     fn hash_vec_query(&self, v: &[f32]) -> Hash {
-//         self.hash_and_cast_vec(v)
-//     }
-//
-//     fn hash_vec_put(&self, v: &[f32]) -> Hash {
-//         self.hash_and_cast_vec(v)
-//     }
-//
-//     fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe> {
-//         Some(self)
-//     }
-// }
-//
+/// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
+#[derive(Serialize, Deserialize, Clone)]
+pub struct L2<N: Numeric> {
+    pub a: Array2<N>,
+    pub r: N,
+    pub b: Array1<N>,
+    n_projections: usize,
+}
+
+impl<N: Numeric + Float> L2<N> {
+    pub fn new(dim: usize, r: f32, n_projections: usize, seed: u64) -> Self {
+        let mut rng = create_rng(seed);
+        let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
+        let uniform_dist = Uniform::new(0., r);
+        let b = Array::random_using(n_projections, uniform_dist, &mut rng);
+
+        // cast to generic
+        let a = a.mapv(|v| N::from_f32(v).unwrap());
+        let b = b.mapv(|v| N::from_f32(v).unwrap());
+        let r = N::from_f32(r).unwrap();
+
+        L2 {
+            a,
+            r,
+            b,
+            n_projections,
+        }
+    }
+
+    pub(crate) fn hash_vec(&self, v: &[N]) -> Array1<N> {
+        ((self.a.dot(&aview1(v)) + &self.b) / self.r).mapv(|x| x.floor())
+    }
+
+    fn hash_and_cast_vec(&self, v: &[N]) -> Hash {
+        // not DRY. we don't call hash_vec to save function call.
+        ((self.a.dot(&aview1(v)) + &self.b) / self.r)
+            .mapv(|x| {
+                let a: HashPrimitive = NumCast::from(x.floor()).unwrap();
+                a
+            })
+            .to_vec()
+    }
+}
+
+impl<N: Numeric + Float> VecHash<N> for L2<N> {
+    fn hash_vec_query(&self, v: &[N]) -> Hash {
+        self.hash_and_cast_vec(v)
+    }
+
+    fn hash_vec_put(&self, v: &[N]) -> Hash {
+        self.hash_and_cast_vec(v)
+    }
+
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N>> {
+        Some(self)
+    }
+}
+
 // /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
 // #[derive(Serialize, Deserialize, Clone)]
 // pub struct MIPS {

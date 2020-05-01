@@ -350,7 +350,7 @@ mod test {
 
     #[test]
     fn test_sql_table_init() {
-        let sql = SqlTableMem::new(1, true, ".").unwrap();
+        let sql = SqlTableMem::<f32>::new(1, true, ".").unwrap();
         let mut stmt = sql
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
@@ -402,7 +402,7 @@ mod test {
         let p = "./delete.db3";
         sql.to_db(p).unwrap();
 
-        let mut sql = SqlTable::new(1, true, p).unwrap();
+        let mut sql = SqlTable::<f32>::new(1, true, p).unwrap();
         sql.to_mem().unwrap();
         assert_eq!(sql.query_bucket(&vec![1, 2], 0).unwrap().take(&0), Some(0));
         std::fs::remove_file(p).unwrap();

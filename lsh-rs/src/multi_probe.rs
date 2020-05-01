@@ -7,6 +7,7 @@ use fnv::FnvHashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
 use ndarray::stack;
+use num::{Float, Zero};
 use rand::distributions::Uniform;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -122,11 +123,14 @@ pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<HashPrimitiv
 }
 
 #[derive(PartialEq, Clone)]
-struct PerturbState<'a> {
+struct PerturbState<'a, N>
+where
+    N: Numeric + Float,
+{
     // original sorted zj
     z: &'a [usize],
     // original xi(delta)
-    distances: &'a [FloatSize],
+    distances: &'a [N],
     // selection of zjs
     // We start with the first one, as this is the lowest score.
     selection: Vec<usize>,
@@ -134,8 +138,11 @@ struct PerturbState<'a> {
     original_hash: Option<Hash>,
 }
 
-impl<'a> PerturbState<'a> {
-    fn new(z: &'a [usize], distances: &'a [FloatSize], switchpoint: usize, hash: Hash) -> Self {
+impl<'a, N> PerturbState<'a, N>
+where
+    N: Numeric + Float,
+{
+    fn new(z: &'a [usize], distances: &'a [N], switchpoint: usize, hash: Hash) -> Self {
         PerturbState {
             z,
             distances,
@@ -145,8 +152,8 @@ impl<'a> PerturbState<'a> {
         }
     }
 
-    fn score(&self) -> FloatSize {
-        let mut score = 0.;
+    fn score(&self) -> N {
+        let mut score = Zero::zero();
         for &index in self.selection.iter() {
             let zj = self.z[index];
             score += self.distances[zj];
@@ -203,43 +210,51 @@ impl<'a> PerturbState<'a> {
 }
 
 // implement ordering so that we can create a min heap
-impl Ord for PerturbState<'_> {
-    fn cmp(&self, other: &PerturbState) -> Ordering {
+impl<N> Ord for PerturbState<'_, N>
+where
+    N: Numeric + Float,
+{
+    fn cmp(&self, other: &PerturbState<N>) -> Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl PartialOrd for PerturbState<'_> {
-    fn partial_cmp(&self, other: &PerturbState) -> Option<Ordering> {
+impl<N> PartialOrd for PerturbState<'_, N>
+where
+    N: Numeric + Float,
+{
+    fn partial_cmp(&self, other: &PerturbState<N>) -> Option<Ordering> {
         other.score().partial_cmp(&self.score())
     }
 }
 
-impl Eq for PerturbState<'_> {}
+impl<N> Eq for PerturbState<'_, N> where N: Numeric + Float {}
 
-impl L2 {
+impl<N> L2<N>
+where
+    N: Numeric + Float,
+{
     /// Computes the distance between the query hash and the boundary of the slot r (W in the paper)
     ///
     /// As stated by Multi-Probe LSH paper:
     /// For δ ∈ {−1, +1}, let xi(δ) be the distance of q from the boundary of the slot
-    fn distance_to_bound(
-        &self,
-        q: &DataPointSlice,
-        hash: Option<&Hash>,
-    ) -> (Array1<FloatSize>, Array1<FloatSize>) {
+    fn distance_to_bound(&self, q: &[N], hash: Option<&Hash>) -> (Array1<N>, Array1<N>) {
         let hash = match hash {
             None => self.hash_vec(q).to_vec(),
-            Some(h) => h.iter().map(|&v| v as FloatSize).collect_vec(),
+            Some(h) => h.iter().map(|&v| N::from_i8(v).unwrap()).collect_vec(),
         };
         let f = self.a.dot(&aview1(q)) + &self.b;
         let xi_min1 = f - &aview1(&hash) * self.r;
-        let xi_plus1: Array1<FloatSize> = self.r - &xi_min1;
+        let xi_plus1: Array1<N> = xi_min1.map(|x| self.r - *x);
         (xi_min1, xi_plus1)
     }
 }
 
-impl<N: Numeric> QueryDirectedProbe<N> for L2 {
-    fn query_directed_probe(&self, q: &DataPointSlice, budget: usize) -> Result<Vec<Hash>> {
+impl<N> QueryDirectedProbe<N> for L2<N>
+where
+    N: Numeric + Float,
+{
+    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Hash>> {
         // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
         // https://www.youtube.com/watch?v=c5DHtx5VxX8
         let hash = self.hash_vec_query(q);
@@ -248,7 +263,7 @@ impl<N: Numeric> QueryDirectedProbe<N> for L2 {
         // < this point = -1
         let switchpoint = xi_min.len();
 
-        let distances: Vec<FloatSize> = stack!(Axis(0), xi_min, xi_plus).to_vec();
+        let distances: Vec<N> = stack!(Axis(0), xi_min, xi_plus).to_vec();
 
         // indexes of the least scores to the highest
         // all below is an argsort
@@ -353,7 +368,7 @@ mod test {
 
     #[test]
     fn test_l2_xi_distances() {
-        let l2 = L2::new(4, 4., 3, 1);
+        let l2 = L2::<f32>::new(4, 4., 3, 1);
         let (xi_min, xi_plus) = l2.distance_to_bound(&[1., 2., 3., 1.], None);
         assert_eq!(xi_min, arr1(&[2.0210547, 1.9154847, 0.89937115]));
         assert_eq!(xi_plus, arr1(&[1.9789453, 2.0845153, 3.1006289]));

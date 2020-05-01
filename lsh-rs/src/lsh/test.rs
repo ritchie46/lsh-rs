@@ -20,13 +20,13 @@ fn test_hash_table() {
 #[test]
 fn test_index_only() {
     // Test if vec storage is increased
-    let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
+    let mut lsh: LshMem<f32, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
     let v1 = &[2., 3., 4.];
     lsh.store_vec(v1).unwrap();
     assert_eq!(lsh.hash_tables.unwrap().vec_store.map.len(), 1);
 
     // Test if vec storage is empty
-    let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).only_index().l2(2.).unwrap();
+    let mut lsh: LshMem<f32, _> = LSH::new(5, 9, 3).seed(1).only_index().l2(2.).unwrap();
     lsh.store_vec(v1).unwrap();
     assert_eq!(lsh.hash_tables.as_ref().unwrap().vec_store.map.len(), 0);
     lsh.query_bucket_ids(v1).unwrap();
@@ -34,7 +34,7 @@ fn test_index_only() {
 
 #[test]
 fn test_serialization() {
-    let mut lsh: LSH<MemoryTable, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
+    let mut lsh: LshMem<f32, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
     let v1 = &[2., 3., 4.];
     lsh.store_vec(v1).unwrap();
     let mut tmp = std::env::temp_dir();

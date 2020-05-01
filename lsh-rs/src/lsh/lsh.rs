@@ -1,6 +1,6 @@
 use crate::{
     data::Numeric,
-    hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
+    hash::{Hash, SignRandomProjections, VecHash, L2},
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     utils::create_rng,
     Error, FloatSize, Result,
@@ -10,6 +10,7 @@ use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
+use num::Float;
 use rand::Rng;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
@@ -32,10 +33,10 @@ pub type LshMem<N, H> = LSH<N, MemoryTable<N>, H>;
 /// let n_projections = 9;
 /// let n_hash_tables = 45;
 /// let dim = 10;
-/// let lsh = LshMem::new(n_projections, n_hash_tables, dim)
+/// let lsh: LshMem<f32, _> = LshMem::new(n_projections, n_hash_tables, dim)
 ///     .only_index()
 ///     .seed(1)
-///     .srp();
+///     .srp().unwrap();
 /// ```
 /// # Builder pattern methods
 /// The following methods can be used to change internal state during object initialization:
@@ -117,7 +118,7 @@ impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, SignRandomProjec
     }
 }
 
-impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2> {
+impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2<N>> {
     /// Create a new L2 LSH
     ///
     /// See hash function:
@@ -141,31 +142,31 @@ impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2> {
     }
 }
 
-impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS> {
-    /// Create a new MIPS LSH
-    ///
-    /// Async hasher
-    ///
-    /// See hash function:
-    /// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
-    ///
-    /// # Arguments
-    ///
-    /// * `r` - Parameter of hash function.
-    /// * `U` - Parameter of hash function.
-    /// * `m` - Parameter of hash function.
-    pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Result<Self> {
-        let mut rng = create_rng(self._seed);
-        let mut hashers = Vec::with_capacity(self.n_hash_tables);
-
-        for _ in 0..self.n_hash_tables {
-            let seed = rng.gen();
-            let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
-            hashers.push(hasher);
-        }
-        lsh_from_lsh(self, hashers)
-    }
-}
+// impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS> {
+//     /// Create a new MIPS LSH
+//     ///
+//     /// Async hasher
+//     ///
+//     /// See hash function:
+//     /// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
+//     ///
+//     /// # Arguments
+//     ///
+//     /// * `r` - Parameter of hash function.
+//     /// * `U` - Parameter of hash function.
+//     /// * `m` - Parameter of hash function.
+//     pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Result<Self> {
+//         let mut rng = create_rng(self._seed);
+//         let mut hashers = Vec::with_capacity(self.n_hash_tables);
+//
+//         for _ in 0..self.n_hash_tables {
+//             let seed = rng.gen();
+//             let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
+//             hashers.push(hasher);
+//         }
+//         lsh_from_lsh(self, hashers)
+//     }
+// }
 
 impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<N, T, H> {
     /// Query bucket collision for a batch of data points in parallel.
@@ -200,9 +201,9 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
     /// # Examples
     ///```
     /// use lsh_rs::LshSql;
-    /// let mut lsh = LshSql::new(5, 10, 3).srp();
-    /// let vs = &[&[2., 3., 4.],
-    ///            &[-1., -1., 1.]];
+    /// let mut lsh = LshSql::new(5, 10, 3).srp().unwrap();
+    /// let vs = &[vec![2., 3., 4.],
+    ///            vec![-1., -1., 1.]];
     /// let ids = lsh.store_vecs(vs);
     /// ```
     pub fn store_vecs(&mut self, vs: &[Vec<N>]) -> Result<Vec<u32>> {
@@ -247,9 +248,9 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
     ///```
     /// use lsh_rs::LshSql;
     /// use ndarray::prelude::*;
-    /// let mut lsh = LshSql::new(5, 10, 3).srp();
+    /// let mut lsh = LshSql::new(5, 10, 3).srp().unwrap();
     /// let vs = array![[1., 2., 3.], [4., 5., 6.]];
-    /// let ids = lsh.store_array(vs);
+    /// let ids = lsh.store_array(vs.view());
     /// ```
     pub fn store_array(&mut self, vs: ArrayView2<N>) -> Result<Vec<u32>> {
         self.validate_vec(vs.slice(s![0, ..]).as_slice().unwrap())?;
@@ -389,7 +390,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
     /// # Examples
     /// ```
     /// use lsh_rs::LshSql;
-    /// let mut lshd = LshSql::new(5, 10, 3).srp();
+    /// let mut lsh = LshSql::new(5, 10, 3).srp().unwrap();
     /// let v = &[2., 3., 4.];
     /// let id = lsh.store_vec(v);
     /// ```
