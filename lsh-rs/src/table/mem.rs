@@ -1,10 +1,10 @@
 use crate::{
     constants::DESCRIBE_MAX,
+    data::Numeric,
     hash::{Hash, HashPrimitive},
     table::general::{Bucket, HashTables},
     utils::{all_eq, increase_capacity},
     DataPoint, DataPointSlice, Error, Result,
-    data::Numeric,
 };
 use fnv::{FnvHashMap as HashMap, FnvHashSet};
 use serde::{Deserialize, Serialize};

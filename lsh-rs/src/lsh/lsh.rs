@@ -18,8 +18,8 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
-pub type LshSql<N, H> = LSH<N, SqlTable, H>;
-pub type LshSqlMem<N, H> = LSH<N, SqlTableMem, H>;
+pub type LshSql<N, H> = LSH<N, SqlTable<N>, H>;
+pub type LshSqlMem<N, H> = LSH<N, SqlTableMem<N>, H>;
 pub type LshMem<N, H> = LSH<N, MemoryTable<N>, H>;
 
 /// Wrapper for LSH functionality.
@@ -524,7 +524,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
     }
 }
 
-impl<N: Numeric, T: VecHash<N> + Serialize> LSH<N, SqlTable, T> {
+impl<N: Numeric, T: VecHash<N> + Serialize> LSH<N, SqlTable<N>, T> {
     /// Commit SqlTable backend
     pub fn commit(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
