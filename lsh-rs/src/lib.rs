@@ -57,28 +57,28 @@
 //!
 //! ```
 //! // hyper parameter r in https://arxiv.org/pdf/1411.3787.pdf (eq. 8)
-//! use lsh_rs::LshSql;
+//! use lsh_rs::LshMem;
 //! let bucket_width = 2.2;
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim).l2(bucket_width);
+//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).l2(bucket_width).unwrap();
 //! ```
 //!
 //! ## Maximum Inner Product (MIPS)
 //! LSH for maximum inner product search.
 //! ```rust
-//! use lsh_rs::LshSql;
+//! use lsh_rs::LshMem;
 //! let bucket_width = 2.2;
 //! // l2(x) < U < 1.0
 //! let U = 0.83;
-//! let r = 4;
+//! let r = 4.;
 //! // number of concatenations
 //! let m = 3;
 //! let n_projections = 15;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh: LshSql<f32, _> = LshSql::new(n_projections, n_hash_tables, dim).mips(r, U, m);
+//! let mut lsh: LshMem<f32, _> = LshMem::new(n_projections, n_hash_tables, dim).mips(r, U, m).unwrap();
 //! ```
 //!
 //! ## Seed
@@ -86,11 +86,11 @@
 //! is taken from the system. If you want to have reproducable outcomes, you can set a manual seed.
 //!
 //! ```rust
-//! use lsh_rs::LshSql;
+//! use lsh_rs::LshMem;
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim).seed(12).srp();
+//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).seed(12).srp();
 //! ```
 //!
 //! ## Unique indexes
