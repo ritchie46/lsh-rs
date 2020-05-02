@@ -78,11 +78,11 @@ fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 enum LshTypes {
-    L2(LshSql<L2>),
-    L2Mem(LshMem<L2>),
-    Mips(LshSql<MIPS>),
-    Srp(LshSql<SignRandomProjections>),
-    SrpMem(LshMem<SignRandomProjections>),
+    L2(LshSql<f32, L2<f32>>),
+    L2Mem(LshMem<f32, L2<f32>>),
+    Mips(LshSql<f32, MIPS<f32>>),
+    Srp(LshSql<f32, SignRandomProjections<f32>>),
+    SrpMem(LshMem<f32, SignRandomProjections<f32>>),
     Empty,
 }
 
@@ -341,7 +341,7 @@ impl LshL2 {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshSql::new(n_projections, n_hash_tables, dim)
+        let r = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -374,7 +374,7 @@ impl LshL2Mem {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshMem::new(n_projections, n_hash_tables, dim)
+        let r = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -409,7 +409,7 @@ impl LshMips {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshSql::new(n_projections, n_hash_tables, dim)
+        let r = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -440,7 +440,7 @@ impl LshSrp {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshSql::new(n_projections, n_hash_tables, dim)
+        let r = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -471,7 +471,7 @@ impl LshSrpMem {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshMem::new(n_projections, n_hash_tables, dim)
+        let r = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)

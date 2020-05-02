@@ -20,6 +20,7 @@
 //!         - MIPS
 //!     - **Query directed probing**
 //!         - L2
+//! * Generic numeric types
 //!
 //! ## Getting started
 //!
@@ -32,8 +33,9 @@
 //! // Do one time expensive preprocessing.
 //! let n_projections = 9;
 //! let n_hash_tables = 30;
+//! let dim = 10;
 //! let dim = 3;
-//! let mut lsh = LshMem::new(n_projections, n_hash_tables, dim).srp();
+//! let mut lsh = LshMem::new(n_projections, n_hash_tables, dim).srp().unwrap();
 //! lsh.store_vecs(p);
 //!
 //! // Query in sublinear time.
@@ -44,8 +46,11 @@
 //! ## Signed Random Projections
 //! LSH for maximum cosine similarity search.
 //! ```rust
-//! use lsh_rs::LshSql;
-//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).srp();
+//! use lsh_rs::LshMem;
+//! let n_projections = 9;
+//! let n_hash_tables = 30;
+//! let dim = 10;
+//! let mut lsh = LshMem::<f64, _>::new(n_projections, n_hash_tables, dim).srp();
 //! ```
 //!
 //! ## L2
@@ -53,21 +58,28 @@
 //!
 //! ```
 //! // hyper parameter r in https://arxiv.org/pdf/1411.3787.pdf (eq. 8)
-//! use lsh_rs::LshSql;
+//! use lsh_rs::LshMem;
 //! let bucket_width = 2.2;
-//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).l2(bucket_width);
+//! let n_projections = 9;
+//! let n_hash_tables = 10;
+//! let dim = 10;
+//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).l2(bucket_width).unwrap();
 //! ```
 //!
 //! ## Maximum Inner Product (MIPS)
 //! LSH for maximum inner product search.
 //! ```rust
-//! use lsh_rs::LshSql;
+//! use lsh_rs::LshMem;
 //! let bucket_width = 2.2;
 //! // l2(x) < U < 1.0
 //! let U = 0.83;
+//! let r = 4.;
 //! // number of concatenations
 //! let m = 3;
-//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).mips(r, U, m);
+//! let n_projections = 15;
+//! let n_hash_tables = 10;
+//! let dim = 10;
+//! let mut lsh: LshMem<f32, _> = LshMem::new(n_projections, n_hash_tables, dim).mips(r, U, m).unwrap();
 //! ```
 //!
 //! ## Seed
@@ -75,8 +87,11 @@
 //! is taken from the system. If you want to have reproducable outcomes, you can set a manual seed.
 //!
 //! ```rust
-//! use lsh_rs::LshSql;
-//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).seed(12).srp();
+//! use lsh_rs::LshMem;
+//! let n_projections = 9;
+//! let n_hash_tables = 10;
+//! let dim = 10;
+//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).seed(12).srp();
 //! ```
 //!
 //! ## Unique indexes
@@ -84,8 +99,11 @@
 //! hash table). You can choose to only store unique indexes of the data points. The index ids are
 //! assigned in chronological order. This will drastically decrease the required memory.
 //! ```rust
-//! use lsh_rs::LshSql;
-//! let mut lsh = LshSql::new(n_projections, n_hash_tables, dim).only_index().srp();
+//! use lsh_rs::LshMem;
+//! let n_projections = 9;
+//! let n_hash_tables = 10;
+//! let dim = 10;
+//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).only_index().srp();
 //! ```
 //!
 //! ## Builder pattern methods
@@ -116,7 +134,6 @@
 #![allow(dead_code, non_snake_case)]
 #[cfg(feature = "blas")]
 extern crate blas_src;
-extern crate crossbeam;
 extern crate ndarray;
 mod hash;
 mod lsh {
@@ -137,10 +154,8 @@ pub mod utils;
 pub use crate::lsh::lsh::{LshMem, LshSql, LshSqlMem, LSH};
 pub use hash::{Hash, HashPrimitive, SignRandomProjections, VecHash, L2, MIPS};
 pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_mem::SqlTableMem};
+pub mod data;
 pub mod stats;
 
-pub type FloatSize = f32;
-pub type DataPoint = Vec<f32>;
-pub type DataPointSlice = [f32];
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;

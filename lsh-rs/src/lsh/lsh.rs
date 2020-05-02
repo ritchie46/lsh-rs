@@ -1,13 +1,15 @@
+use crate::table::general::Bucket;
 use crate::{
+    data::Numeric,
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     utils::create_rng,
-    Error, FloatSize, Result,
+    Error, Result, SqlTable,
 };
-use crate::{DataPoint, DataPointSlice, SqlTable};
-use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
+use itertools::Itertools;
 use ndarray::prelude::*;
+use num::Float;
 use rand::Rng;
 use rayon::prelude::*;
 use serde::de::DeserializeOwned;
@@ -16,9 +18,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
-pub type LshSql<H> = LSH<SqlTable, H>;
-pub type LshSqlMem<H> = LSH<SqlTableMem, H>;
-pub type LshMem<H> = LSH<MemoryTable, H>;
+pub type LshSql<N, H> = LSH<N, SqlTable<N>, H>;
+pub type LshSqlMem<N, H> = LSH<N, SqlTableMem<N>, H>;
+pub type LshMem<N, H> = LSH<N, MemoryTable<N>, H>;
 
 /// Wrapper for LSH functionality.
 /// Can be initialized following the Builder pattern.
@@ -30,10 +32,10 @@ pub type LshMem<H> = LSH<MemoryTable, H>;
 /// let n_projections = 9;
 /// let n_hash_tables = 45;
 /// let dim = 10;
-/// let lsh = LshMem::new(n_projections, n_hash_tables, dim)
+/// let lsh: LshMem<f32, _> = LshMem::new(n_projections, n_hash_tables, dim)
 ///     .only_index()
 ///     .seed(1)
-///     .srp();
+///     .srp().unwrap();
 /// ```
 /// # Builder pattern methods
 /// The following methods can be used to change internal state during object initialization:
@@ -42,7 +44,7 @@ pub type LshMem<H> = LSH<MemoryTable, H>;
 /// * [set_database_file](struct.LSH.html#method.set_database_file)
 /// * [multi_probe](struct.LSH.html#method.multi_probe)
 /// * [increase_storage](struct.LSH.html#method.increase_storage)
-pub struct LSH<T: HashTables, H: VecHash> {
+pub struct LSH<N: Numeric, T: HashTables<N>, H: VecHash<N>> {
     /// Number of hash tables. `L` in literature.
     pub n_hash_tables: usize,
     /// Number of hash functions. `K` in literature.
@@ -61,13 +63,19 @@ pub struct LSH<T: HashTables, H: VecHash> {
     /// multi probe budget
     pub(crate) _multi_probe_budget: usize,
     _db_path: String,
+    // TODO: Delete
+    _type: Option<N>,
 }
 
 /// Create a new LSH instance. Used in the builder pattern
-fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
-    lsh: &mut LSH<T, H>,
+fn lsh_from_lsh<
+    N: Numeric + DeserializeOwned,
+    T: HashTables<N>,
+    H: VecHash<N> + Serialize + DeserializeOwned,
+>(
+    lsh: &mut LSH<N, T, H>,
     hashers: Vec<H>,
-) -> Result<LSH<T, H>> {
+) -> Result<LSH<N, T, H>> {
     let mut ht = *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_path)?;
 
     // Load hashers if store hashers fails. (i.e. exists)
@@ -89,11 +97,12 @@ fn lsh_from_lsh<T: HashTables, H: VecHash + Serialize + DeserializeOwned>(
         _multi_probe: lsh._multi_probe,
         _multi_probe_budget: lsh._multi_probe_budget,
         _db_path: lsh._db_path.clone(),
+        _type: None,
     };
     Ok(lsh)
 }
 
-impl<T: HashTables> LSH<T, SignRandomProjections> {
+impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, SignRandomProjections<N>> {
     /// Create a new SignRandomProjections LSH
     pub fn srp(&mut self) -> Result<Self> {
         let mut rng = create_rng(self._seed);
@@ -108,7 +117,7 @@ impl<T: HashTables> LSH<T, SignRandomProjections> {
     }
 }
 
-impl<T: HashTables> LSH<T, L2> {
+impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2<N>> {
     /// Create a new L2 LSH
     ///
     /// See hash function:
@@ -132,7 +141,7 @@ impl<T: HashTables> LSH<T, L2> {
     }
 }
 
-impl<T: HashTables> LSH<T, MIPS> {
+impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS<N>> {
     /// Create a new MIPS LSH
     ///
     /// Async hasher
@@ -145,7 +154,7 @@ impl<T: HashTables> LSH<T, MIPS> {
     /// * `r` - Parameter of hash function.
     /// * `U` - Parameter of hash function.
     /// * `m` - Parameter of hash function.
-    pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Result<Self> {
+    pub fn mips(&mut self, r: f32, U: N, m: usize) -> Result<Self> {
         let mut rng = create_rng(self._seed);
         let mut hashers = Vec::with_capacity(self.n_hash_tables);
 
@@ -158,12 +167,12 @@ impl<T: HashTables> LSH<T, MIPS> {
     }
 }
 
-impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
+impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<N, T, H> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch_par(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch_par(&self, vs: &[Vec<N>]) -> Result<Vec<Vec<u32>>> {
         vs.into_par_iter()
             .map(|v| self.query_bucket_ids(v))
             .collect()
@@ -173,10 +182,7 @@ impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch_arr_par(
-        &self,
-        vs: ArrayView2<FloatSize>,
-    ) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch_arr_par(&self, vs: ArrayView2<N>) -> Result<Vec<Vec<u32>>> {
         vs.axis_iter(Axis(0))
             .into_par_iter()
             .map(|v| self.query_bucket_ids(v.as_slice().unwrap()))
@@ -184,7 +190,7 @@ impl<H: VecHash + Sync, T: HashTables + Sync> LSH<T, H> {
     }
 }
 
-impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
+impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
     /// Store multiple vectors in storage. Before storing the storage capacity is possibly
     /// increased to match the data points.
     ///
@@ -194,38 +200,30 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     /// # Examples
     ///```
     /// use lsh_rs::LshSql;
-    /// let mut lsh = LshSql::new(5, 10, 3).srp();
-    /// let vs = &[&[2., 3., 4.],
-    ///            &[-1., -1., 1.]];
+    /// let mut lsh = LshSql::new(5, 10, 3).srp().unwrap();
+    /// let vs = &[vec![2., 3., 4.],
+    ///            vec![-1., -1., 1.]];
     /// let ids = lsh.store_vecs(vs);
     /// ```
-    pub fn store_vecs(&mut self, vs: &[DataPoint]) -> Result<Vec<u32>> {
+    pub fn store_vecs(&mut self, vs: &[Vec<N>]) -> Result<Vec<u32>> {
         self.validate_vec(&vs[0])?;
         self.hash_tables
             .as_mut()
             .unwrap()
             .increase_storage(vs.len());
 
-        // one thread prepares hashes, while the other loads the hashes in the hashtables.
-        let (tx, rx) = unbounded();
-        let hashers = &self.hashers;
-        crossbeam::scope(|s| {
-            s.spawn(|_| {
-                vs.iter().for_each(|v| {
-                    for (i, proj) in hashers.iter().enumerate() {
-                        let hash = proj.hash_vec_put(v);
-                        tx.send((hash, v, i)).unwrap();
-                    }
-                });
-                drop(tx)
-            });
-        })
-        .expect("something went wrong in the thread that prepares the hashes.");
-
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
-        for (hash, v, i) in rx {
-            insert_idx.push(ht.put(hash, v, i)?);
+        for (i, proj) in self.hashers.iter().enumerate() {
+            for v in vs.iter() {
+                let hash = proj.hash_vec_put(v);
+                match (ht.put(hash, v, i), i) {
+                    // only for the first hash table save the index as it will be the same for all
+                    (Ok(idx), 0) => insert_idx.push(idx),
+                    (Err(e), _) => return Err(e),
+                    _ => {}
+                }
+            }
         }
         self.hash_tables.replace(ht);
         Ok(insert_idx)
@@ -241,44 +239,36 @@ impl<H: VecHash + Sync, T: HashTables> LSH<T, H> {
     ///```
     /// use lsh_rs::LshSql;
     /// use ndarray::prelude::*;
-    /// let mut lsh = LshSql::new(5, 10, 3).srp();
+    /// let mut lsh = LshSql::new(5, 10, 3).srp().unwrap();
     /// let vs = array![[1., 2., 3.], [4., 5., 6.]];
-    /// let ids = lsh.store_array(vs);
+    /// let ids = lsh.store_array(vs.view());
     /// ```
-    pub fn store_array(&mut self, vs: ArrayView2<FloatSize>) -> Result<Vec<u32>> {
+    pub fn store_array(&mut self, vs: ArrayView2<N>) -> Result<Vec<u32>> {
         self.validate_vec(vs.slice(s![0, ..]).as_slice().unwrap())?;
         self.hash_tables
             .as_mut()
             .unwrap()
             .increase_storage(vs.len());
 
-        // one thread prepares hashes, while the other loads the hashes in the hashtables.
-        let (tx, rx) = unbounded();
-        let hashers = &self.hashers;
-        crossbeam::scope(|s| {
-            s.spawn(|_| {
-                vs.axis_iter(Axis(0)).for_each(|v| {
-                    for (i, proj) in hashers.iter().enumerate() {
-                        let hash = proj.hash_vec_put(v.as_slice().unwrap());
-                        tx.send((hash, v, i)).unwrap();
-                    }
-                });
-                drop(tx)
-            });
-        })
-        .expect("something went wrong in the thread that prepares the hashes.");
-
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
-        for (hash, v, i) in rx {
-            insert_idx.push(ht.put(hash, v.as_slice().unwrap(), i)?);
+        for (i, proj) in self.hashers.iter().enumerate() {
+            for v in vs.axis_iter(Axis(0)) {
+                let hash = proj.hash_vec_put(v.as_slice().unwrap());
+                match (ht.put(hash, v.as_slice().unwrap(), i), i) {
+                    // only for the first hash table save the index as it will be the same for all
+                    (Ok(idx), 0) => insert_idx.push(idx),
+                    (Err(e), _) => return Err(e),
+                    _ => {}
+                }
+            }
         }
         self.hash_tables.replace(ht);
         Ok(insert_idx)
     }
 }
 
-impl<H: VecHash, T: HashTables> LSH<T, H> {
+impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -299,11 +289,12 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
             _multi_probe: false,
             _multi_probe_budget: 16,
             _db_path: "./lsh.db3".to_string(),
+            _type: None,
         };
         lsh
     }
 
-    pub(crate) fn validate_vec(&self, v: &DataPointSlice) -> Result<()> {
+    pub(crate) fn validate_vec<A>(&self, v: &[A]) -> Result<()> {
         if !(v.len() == self.dim) {
             return Err(Error::Failed(
                 "data point is not valid, are the dimensions correct?".to_string(),
@@ -382,18 +373,18 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// # Examples
     /// ```
     /// use lsh_rs::LshSql;
-    /// let mut lshd = LshSql::new(5, 10, 3).srp();
+    /// let mut lsh = LshSql::new(5, 10, 3).srp().unwrap();
     /// let v = &[2., 3., 4.];
     /// let id = lsh.store_vec(v);
     /// ```
-    pub fn store_vec(&mut self, v: &DataPointSlice) -> Result<u32> {
+    pub fn store_vec(&mut self, v: &[N]) -> Result<u32> {
         self.validate_vec(v)?;
 
         let mut idx = 0;
         let mut ht = self.hash_tables.take().unwrap();
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_put(v);
-            idx = ht.put(hash, v, i)?;
+            idx = ht.put(hash, &v, i)?;
         }
         self.hash_tables.replace(ht);
         Ok(idx)
@@ -405,12 +396,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     /// * `idx` - Id of the hash that needs to be updated.
     /// * `new_v` - New data point that needs to be hashed.
     /// * `old_v` - Old data point. Needed to remove the old hash.
-    pub fn update_by_idx(
-        &mut self,
-        idx: u32,
-        new_v: &DataPointSlice,
-        old_v: &DataPointSlice,
-    ) -> Result<()> {
+    pub fn update_by_idx(&mut self, idx: u32, new_v: &[N], old_v: &[N]) -> Result<()> {
         let mut ht = self.hash_tables.take().unwrap();
         for (i, proj) in self.hashers.iter().enumerate() {
             let new_hash = proj.hash_vec_put(new_v);
@@ -421,7 +407,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         Ok(())
     }
 
-    fn query_bucket_union(&self, v: &DataPointSlice) -> Result<HashSet<u32>> {
+    fn query_bucket_union(&self, v: &[N]) -> Result<Bucket> {
         self.validate_vec(v)?;
         if self._multi_probe {
             return self.multi_probe_bucket_union(v);
@@ -441,7 +427,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket(&self, v: &DataPointSlice) -> Result<Vec<&DataPoint>> {
+    pub fn query_bucket(&self, v: &[N]) -> Result<Vec<&Vec<N>>> {
         self.validate_vec(v)?;
         if self.only_index_storage {
             return Err(Error::Failed(
@@ -461,7 +447,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `v` - Query vector
-    pub fn query_bucket_ids(&self, v: &DataPointSlice) -> Result<Vec<u32>> {
+    pub fn query_bucket_ids(&self, v: &[N]) -> Result<Vec<u32>> {
         self.validate_vec(v)?;
         let bucket_union = self.query_bucket_union(v)?;
         Ok(bucket_union.iter().copied().collect())
@@ -471,7 +457,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch(&self, vs: &[DataPoint]) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch(&self, vs: &[Vec<N>]) -> Result<Vec<Vec<u32>>> {
         vs.iter().map(|v| self.query_bucket_ids(v)).collect()
     }
 
@@ -479,7 +465,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `vs` - Array of data points.
-    pub fn query_bucket_ids_batch_arr(&self, vs: ArrayView2<FloatSize>) -> Result<Vec<Vec<u32>>> {
+    pub fn query_bucket_ids_batch_arr(&self, vs: ArrayView2<N>) -> Result<Vec<Vec<u32>>> {
         vs.axis_iter(Axis(0))
             .map(|v| self.query_bucket_ids(v.as_slice().unwrap()))
             .collect()
@@ -489,7 +475,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     ///
     /// # Arguments
     /// * `v` - Data point
-    pub fn delete_vec(&mut self, v: &DataPointSlice) -> Result<()> {
+    pub fn delete_vec(&mut self, v: &[N]) -> Result<()> {
         self.validate_vec(v)?;
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
@@ -504,7 +490,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
         &self,
         hash: &Hash,
         hash_table_idx: usize,
-        bucket_union: &mut HashSet<u32>,
+        bucket_union: &mut Bucket,
     ) -> Result<()> {
         match self
             .hash_tables
@@ -522,7 +508,7 @@ impl<H: VecHash, T: HashTables> LSH<T, H> {
     }
 }
 
-impl<T: VecHash + Serialize> LSH<SqlTable, T> {
+impl<N: Numeric, T: VecHash<N> + Serialize> LSH<N, SqlTable<N>, T> {
     /// Commit SqlTable backend
     pub fn commit(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
@@ -550,9 +536,10 @@ struct IntermediatBlob {
     _seed: u64,
 }
 
-impl<H> LSH<MemoryTable, H>
+impl<N, H> LSH<N, MemoryTable<N>, H>
 where
-    H: Serialize + DeserializeOwned + VecHash,
+    H: Serialize + DeserializeOwned + VecHash<N>,
+    N: Numeric + DeserializeOwned,
 {
     /// Deserialize MemoryTable backend
     pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {

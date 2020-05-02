@@ -1,79 +1,86 @@
-use crate::{
-    dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng, DataPointSlice, FloatSize,
-};
+use crate::{data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
+use num::traits::NumCast;
+use num::{Float, Zero};
 use serde::{Deserialize, Serialize};
 
 pub type HashPrimitive = i8;
 pub type Hash = Vec<HashPrimitive>;
 
-pub trait VecHash {
-    fn hash_vec_query(&self, v: &[f32]) -> Hash;
-    fn hash_vec_put(&self, v: &[f32]) -> Hash;
+/// Implement this trait to create your own custom hashers.
+/// In case of a symmetrical hash function, only `hash_vec_query` needs to be implemented.
+pub trait VecHash<N> {
+    /// Create a hash for a query data point.
+    fn hash_vec_query(&self, v: &[N]) -> Hash;
+    /// Create a hash for a data point that is being stored.
+    fn hash_vec_put(&self, v: &[N]) -> Hash {
+        self.hash_vec_query(v)
+    }
 
-    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe> {
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N>> {
         None
     }
 }
 
-/// Also called SimHash.
 /// A family of hashers for the cosine similarity.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct SignRandomProjections {
+pub struct SignRandomProjections<N: Numeric> {
     ///  Random unit vectors that will lead to the bits of the hash.
-    hyperplanes: Array2<f32>,
+    hyperplanes: Array2<N>,
 }
 
-impl SignRandomProjections {
+impl<N: Numeric> SignRandomProjections<N> {
     ///
     /// # Arguments
     ///
     /// * `k` - Number of hyperplanes used for determining the hash.
     /// This will also be the hash length.
-    pub fn new(k: usize, dim: usize, seed: u64) -> SignRandomProjections {
+    pub fn new(k: usize, dim: usize, seed: u64) -> Self {
         let mut rng = create_rng(seed);
-        let hp = Array::random_using((dim, k), StandardNormal, &mut rng);
+        let hp: Array2<f32> = Array::random_using((dim, k), StandardNormal, &mut rng);
+        let hp = hp.mapv(|v| N::from_f32(v).unwrap());
 
         SignRandomProjections { hyperplanes: hp }
     }
 
-    fn hash_vec(&self, v: &[f32]) -> Hash {
+    fn hash_vec(&self, v: &[N]) -> Hash {
         let v = aview1(v);
         self.hyperplanes
             .t()
             .dot(&v)
-            .mapv(|ai| if ai > 0. { 1 } else { 0 })
+            .mapv(|ai| if ai > Zero::zero() { 1 } else { 0 })
             .to_vec()
     }
 }
 
-impl VecHash for SignRandomProjections {
-    fn hash_vec_query(&self, v: &[f32]) -> Hash {
-        self.hash_vec(v)
-    }
-
-    fn hash_vec_put(&self, v: &[f32]) -> Hash {
+impl<N: Numeric> VecHash<N> for SignRandomProjections<N> {
+    fn hash_vec_query(&self, v: &[N]) -> Hash {
         self.hash_vec(v)
     }
 }
 
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
 #[derive(Serialize, Deserialize, Clone)]
-pub struct L2 {
-    pub a: Array2<f32>,
-    pub r: f32,
-    pub b: Array1<f32>,
+pub struct L2<N> {
+    pub a: Array2<N>,
+    pub r: N,
+    pub b: Array1<N>,
     n_projections: usize,
 }
 
-impl L2 {
-    pub fn new(dim: usize, r: f32, n_projections: usize, seed: u64) -> L2 {
+impl<N: Numeric + Float> L2<N> {
+    pub fn new(dim: usize, r: f32, n_projections: usize, seed: u64) -> Self {
         let mut rng = create_rng(seed);
         let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
         let uniform_dist = Uniform::new(0., r);
         let b = Array::random_using(n_projections, uniform_dist, &mut rng);
+
+        // cast to generic
+        let a = a.mapv(|v| N::from_f32(v).unwrap());
+        let b = b.mapv(|v| N::from_f32(v).unwrap());
+        let r = N::from_f32(r).unwrap();
 
         L2 {
             a,
@@ -83,56 +90,57 @@ impl L2 {
         }
     }
 
-    pub(crate) fn hash_vec(&self, v: &DataPointSlice) -> Array1<FloatSize> {
+    pub(crate) fn hash_vec(&self, v: &[N]) -> Array1<N> {
         ((self.a.dot(&aview1(v)) + &self.b) / self.r).mapv(|x| x.floor())
     }
 
-    fn hash_and_cast_vec(&self, v: &[f32]) -> Hash {
+    fn hash_and_cast_vec(&self, v: &[N]) -> Hash {
         // not DRY. we don't call hash_vec to save function call.
         ((self.a.dot(&aview1(v)) + &self.b) / self.r)
-            .mapv(|x| x.floor() as HashPrimitive)
+            .mapv(|x| {
+                let hp: HashPrimitive = NumCast::from(x.floor())
+                    .expect("Hash value doesnt fit in the Hash number type i8");
+                hp
+            })
             .to_vec()
     }
 }
 
-impl VecHash for L2 {
-    fn hash_vec_query(&self, v: &[f32]) -> Hash {
+impl<N: Numeric + Float> VecHash<N> for L2<N> {
+    fn hash_vec_query(&self, v: &[N]) -> Hash {
         self.hash_and_cast_vec(v)
     }
 
-    fn hash_vec_put(&self, v: &[f32]) -> Hash {
-        self.hash_and_cast_vec(v)
-    }
-
-    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe> {
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N>> {
         Some(self)
     }
 }
 
 /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
 #[derive(Serialize, Deserialize, Clone)]
-pub struct MIPS {
-    U: f32,
-    M: f32,
+pub struct MIPS<N> {
+    U: N,
+    M: N,
     m: usize,
     dim: usize,
-    hasher: L2,
+    hasher: L2<N>,
 }
 
-impl MIPS {
-    pub fn new(dim: usize, r: f32, U: f32, m: usize, n_projections: usize, seed: u64) -> MIPS {
+impl<N: Numeric + Float> MIPS<N> {
+    pub fn new(dim: usize, r: f32, U: N, m: usize, n_projections: usize, seed: u64) -> Self {
         let l2 = L2::new(dim + m, r, n_projections, seed);
         MIPS {
             U,
-            M: 0.,
+            M: Zero::zero(),
             m,
             dim,
             hasher: l2,
         }
     }
 
-    pub fn fit(&mut self, v: &[f32]) {
-        let mut max_l2 = 0.;
+    pub fn fit(&mut self, v: &[N]) {
+        // TODO: add fit to vechash trait?
+        let mut max_l2 = Zero::zero();
         for x in v.chunks(self.dim) {
             let l2 = l2_norm(x);
             if l2 > max_l2 {
@@ -142,48 +150,49 @@ impl MIPS {
         self.M = max_l2
     }
 
-    pub fn tranform_put(&self, x: &[f32]) -> Vec<f32> {
+    pub fn tranform_put(&self, x: &[N]) -> Vec<N> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
-        if self.M == 0. {
+        if self.M == Zero::zero() {
             panic!("MIPS is not fitted")
         }
 
         // shrink norm such that l2 norm < U < 1.
-        for x_i in x {
+        for x_i in x.iter().cloned() {
             x_new.push(x_i / self.M * self.U)
         }
 
-        let norm_sq = l2_norm(&x_new).powf(2.);
+        let norm_sq = l2_norm(&x_new).powf(N::from_f32(2.).unwrap());
         for i in 1..(self.m + 1) {
-            x_new.push(norm_sq.powf(i as f32))
+            x_new.push(norm_sq.powf(N::from_usize(i).unwrap()))
         }
         x_new
     }
 
-    pub fn transform_query(&self, x: &[f32]) -> Vec<f32> {
+    pub fn transform_query(&self, x: &[N]) -> Vec<N> {
         let mut x_new = Vec::with_capacity(x.len() + self.m);
 
         // normalize query to have l2 == 1.
         let l2 = l2_norm(x);
-        for x_i in x {
+        for x_i in x.iter().cloned() {
             x_new.push(x_i / l2)
         }
 
+        let half = N::from_f32(0.5).unwrap();
         for _ in 0..self.m {
-            x_new.push(0.5)
+            x_new.push(half)
         }
         x_new
     }
 }
 
-impl VecHash for MIPS {
-    fn hash_vec_query(&self, v: &[f32]) -> Hash {
+impl<N: Numeric + Float> VecHash<N> for MIPS<N> {
+    fn hash_vec_query(&self, v: &[N]) -> Hash {
         let q = self.transform_query(v);
         self.hasher.hash_vec_query(&q)
     }
 
-    fn hash_vec_put(&self, v: &[f32]) -> Hash {
+    fn hash_vec_put(&self, v: &[N]) -> Hash {
         let p = self.tranform_put(v);
         self.hasher.hash_vec_query(&p)
     }
@@ -202,7 +211,7 @@ mod test {
         let h2 = l2.hash_vec_query(&[1.1, 2., 3., 1., 3.1]);
 
         // a distant vec
-        let h3 = l2.hash_vec_query(&[100., 100., 100., 100., 100.1]);
+        let h3 = l2.hash_vec_query(&[10., 10., 10., 10., 10.1]);
 
         println!("close: {:?} distant: {:?}", (&h1, &h2), &h3);
         assert_eq!(h1, h2);

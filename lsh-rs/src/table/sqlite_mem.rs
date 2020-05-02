@@ -1,19 +1,20 @@
 use super::sqlite::SqlTable;
 use crate::{
+    data::Numeric,
     hash::{Hash, HashPrimitive},
     table::general::Bucket,
-    DataPoint, DataPointSlice, HashTables, Result,
+    HashTables, Result,
 };
 use fnv::FnvHashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::Path;
 
 /// In memory Sqlite backend for [LSH](struct.LSH.html).
-pub struct SqlTableMem {
-    sql_table: SqlTable,
+pub struct SqlTableMem<N: Numeric> {
+    sql_table: SqlTable<N>,
 }
 
-impl SqlTableMem {
+impl<N: Numeric> SqlTableMem<N> {
     pub fn to_db<P: AsRef<Path>>(&mut self, db_path: P) -> Result<()> {
         let mut new_con = rusqlite::Connection::open(db_path)?;
         {
@@ -26,21 +27,21 @@ impl SqlTableMem {
     }
 }
 
-impl Deref for SqlTableMem {
-    type Target = SqlTable;
+impl<N: Numeric> Deref for SqlTableMem<N> {
+    type Target = SqlTable<N>;
 
-    fn deref(&self) -> &SqlTable {
+    fn deref(&self) -> &SqlTable<N> {
         &self.sql_table
     }
 }
 
-impl DerefMut for SqlTableMem {
-    fn deref_mut(&mut self) -> &mut SqlTable {
+impl<N: Numeric> DerefMut for SqlTableMem<N> {
+    fn deref_mut(&mut self) -> &mut SqlTable<N> {
         &mut self.sql_table
     }
 }
 
-impl HashTables for SqlTableMem {
+impl<N: Numeric> HashTables<N> for SqlTableMem<N> {
     fn new(n_hash_tables: usize, only_index_storage: bool, _db_path: &str) -> Result<Box<Self>> {
         let conn = rusqlite::Connection::open_in_memory()?;
         let sql_table = SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn)?;
@@ -52,11 +53,11 @@ impl HashTables for SqlTableMem {
     /// * `hash` - hashed vector.
     /// * `d` - Vector to store in the buckets.
     /// * `hash_table` - Number of the hash_table to store the vector. Ranging from 0 to L.
-    fn put(&mut self, hash: Hash, d: &DataPointSlice, hash_table: usize) -> Result<u32> {
+    fn put(&mut self, hash: Hash, d: &[N], hash_table: usize) -> Result<u32> {
         self.sql_table.put(hash, d, hash_table)
     }
 
-    fn delete(&mut self, hash: &Hash, d: &DataPointSlice, hash_table: usize) -> Result<()> {
+    fn delete(&mut self, hash: &Hash, d: &[N], hash_table: usize) -> Result<()> {
         self.sql_table.delete(hash, d, hash_table)
     }
 
@@ -65,7 +66,7 @@ impl HashTables for SqlTableMem {
         self.sql_table.query_bucket(hash, hash_table)
     }
 
-    fn idx_to_datapoint(&self, idx: u32) -> Result<&DataPoint> {
+    fn idx_to_datapoint(&self, idx: u32) -> Result<&Vec<N>> {
         self.sql_table.idx_to_datapoint(idx)
     }
 

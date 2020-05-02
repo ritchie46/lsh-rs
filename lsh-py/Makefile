@@ -10,7 +10,7 @@ install: clean uninstall build
 	pip install wheels/floky*.whl
 
 uninstall:
-	pip uninstall floky -y
+	-@pip uninstall floky -y
 
 clean: uninstall
 	@-rm wheels/*

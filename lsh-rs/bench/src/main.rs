@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate test;
 use lsh_rs::{
-    utils::rand_unit_vec, HashTables, LshSqlMem, MemoryTable, SignRandomProjections, SqlTable,
+    utils::rand_unit_vec, HashTables, LshMem, LshSqlMem, SignRandomProjections, SqlTable,
     SqlTableMem, LSH,
 };
 use rand::rngs::SmallRng;
@@ -17,7 +17,7 @@ fn prep_vecs(n: usize, dim: usize) -> Vec<Vec<f32>> {
     v
 }
 
-fn store_n(n: usize, dim: usize, index_only: bool) -> LSH<MemoryTable, SignRandomProjections> {
+fn store_n(n: usize, dim: usize, index_only: bool) -> LshMem<f32, SignRandomProjections<f32>> {
     let v = prep_vecs(n, dim);
     let mut lsh;
     if index_only {
@@ -31,17 +31,17 @@ fn store_n(n: usize, dim: usize, index_only: bool) -> LSH<MemoryTable, SignRando
 
 #[bench]
 fn bench_storing(b: &mut Bencher) {
-    b.iter(|| store_n(100, 100, false))
+    b.iter(|| store_n(1000, 100, false))
 }
 
 #[bench]
 fn bench_storing_index_only(b: &mut Bencher) {
-    b.iter(|| store_n(100, 100, true))
+    b.iter(|| store_n(1000, 100, true))
 }
 
 #[bench]
 fn bench_storing_sqlite_mem(b: &mut Bencher) {
-    let mut lsh = LshSqlMem::new(20, 80, 100).seed(1).l2(4.).unwrap();
+    let mut lsh = LshSqlMem::new(20, 7, 100).seed(1).l2(4.).unwrap();
     b.iter(|| {
         let v = prep_vecs(100, 100);
         lsh.store_vecs(&v);
