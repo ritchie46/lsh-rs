@@ -1,6 +1,6 @@
 use crate::{
     data::Numeric,
-    hash::{Hash, SignRandomProjections, VecHash, L2},
+    hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     utils::create_rng,
     Error, FloatSize, Result,
@@ -142,31 +142,31 @@ impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2<N>> {
     }
 }
 
-// impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS> {
-//     /// Create a new MIPS LSH
-//     ///
-//     /// Async hasher
-//     ///
-//     /// See hash function:
-//     /// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
-//     ///
-//     /// # Arguments
-//     ///
-//     /// * `r` - Parameter of hash function.
-//     /// * `U` - Parameter of hash function.
-//     /// * `m` - Parameter of hash function.
-//     pub fn mips(&mut self, r: f32, U: f32, m: usize) -> Result<Self> {
-//         let mut rng = create_rng(self._seed);
-//         let mut hashers = Vec::with_capacity(self.n_hash_tables);
-//
-//         for _ in 0..self.n_hash_tables {
-//             let seed = rng.gen();
-//             let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
-//             hashers.push(hasher);
-//         }
-//         lsh_from_lsh(self, hashers)
-//     }
-// }
+impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS<N>> {
+    /// Create a new MIPS LSH
+    ///
+    /// Async hasher
+    ///
+    /// See hash function:
+    /// https://www.cs.rice.edu/~as143/Papers/SLIDE_MLSys.pdf
+    ///
+    /// # Arguments
+    ///
+    /// * `r` - Parameter of hash function.
+    /// * `U` - Parameter of hash function.
+    /// * `m` - Parameter of hash function.
+    pub fn mips(&mut self, r: f32, U: N, m: usize) -> Result<Self> {
+        let mut rng = create_rng(self._seed);
+        let mut hashers = Vec::with_capacity(self.n_hash_tables);
+
+        for _ in 0..self.n_hash_tables {
+            let seed = rng.gen();
+            let hasher = MIPS::new(self.dim, r, U, m, self.n_projections, seed);
+            hashers.push(hasher);
+        }
+        lsh_from_lsh(self, hashers)
+    }
+}
 
 impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<N, T, H> {
     /// Query bucket collision for a batch of data points in parallel.

@@ -3,6 +3,7 @@ use num::{FromPrimitive, NumCast, ToPrimitive};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use serde::de::DeserializeOwned;
+use serde::export::fmt::{Debug, Display};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::any::Any;
 use std::cmp::{PartialEq, PartialOrd};
@@ -20,8 +21,18 @@ pub trait Numeric:
     + FromPrimitive
     + AddAssign
     + Serialize
+    + Debug
+    + Display
 {
 }
 
 impl Numeric for f32 {}
 impl Numeric for f64 {}
+impl Numeric for i8 {}
+impl Numeric for i16 {}
+impl Numeric for i32 {}
+impl Numeric for i64 {}
+impl Numeric for u8 {}
+impl Numeric for u16 {}
+impl Numeric for u32 {}
+impl Numeric for u64 {}

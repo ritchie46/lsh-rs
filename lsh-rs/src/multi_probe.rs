@@ -397,7 +397,7 @@ mod test {
         //   delta:             [-1, 1]
 
         let mut ae = a0.clone();
-        ae.expand();
+        ae.expand().unwrap();
         assert_eq!(ae.gen_hash(), [0, -1, 1, 0]);
         assert_eq!(ae.score(), 0.1 + 0.8);
         assert_eq!(ae.selection, [0, 1]);
@@ -408,7 +408,7 @@ mod test {
         //   index:             2
         //   delta:             1
         let mut a_s = a0.clone();
-        a_s.shift();
+        a_s.shift().unwrap();
         assert_eq!(a_s.gen_hash(), [0, 0, 1, 0]);
         assert_eq!(a_s.score(), 0.8);
         assert_eq!(a_s.selection, [1]);

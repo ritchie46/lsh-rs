@@ -65,7 +65,7 @@ impl<N: Numeric> VecHash<N> for SignRandomProjections<N> {
 
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
 #[derive(Serialize, Deserialize, Clone)]
-pub struct L2<N: Numeric> {
+pub struct L2<N> {
     pub a: Array2<N>,
     pub r: N,
     pub b: Array1<N>,
@@ -100,8 +100,9 @@ impl<N: Numeric + Float> L2<N> {
         // not DRY. we don't call hash_vec to save function call.
         ((self.a.dot(&aview1(v)) + &self.b) / self.r)
             .mapv(|x| {
-                let a: HashPrimitive = NumCast::from(x.floor()).unwrap();
-                a
+                let hp: HashPrimitive = NumCast::from(x.floor())
+                    .expect("Hash value doesnt fit in the Hash number type i8");
+                hp
             })
             .to_vec()
     }
@@ -121,103 +122,105 @@ impl<N: Numeric + Float> VecHash<N> for L2<N> {
     }
 }
 
-// /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
-// #[derive(Serialize, Deserialize, Clone)]
-// pub struct MIPS {
-//     U: f32,
-//     M: f32,
-//     m: usize,
-//     dim: usize,
-//     hasher: L2,
-// }
-//
-// impl MIPS {
-//     pub fn new(dim: usize, r: f32, U: f32, m: usize, n_projections: usize, seed: u64) -> MIPS {
-//         let l2 = L2::new(dim + m, r, n_projections, seed);
-//         MIPS {
-//             U,
-//             M: 0.,
-//             m,
-//             dim,
-//             hasher: l2,
-//         }
-//     }
-//
-//     pub fn fit(&mut self, v: &[f32]) {
-//         let mut max_l2 = 0.;
-//         for x in v.chunks(self.dim) {
-//             let l2 = l2_norm(x);
-//             if l2 > max_l2 {
-//                 max_l2 = l2
-//             }
-//         }
-//         self.M = max_l2
-//     }
-//
-//     pub fn tranform_put(&self, x: &[f32]) -> Vec<f32> {
-//         let mut x_new = Vec::with_capacity(x.len() + self.m);
-//
-//         if self.M == 0. {
-//             panic!("MIPS is not fitted")
-//         }
-//
-//         // shrink norm such that l2 norm < U < 1.
-//         for x_i in x {
-//             x_new.push(x_i / self.M * self.U)
-//         }
-//
-//         let norm_sq = l2_norm(&x_new).powf(2.);
-//         for i in 1..(self.m + 1) {
-//             x_new.push(norm_sq.powf(i as f32))
-//         }
-//         x_new
-//     }
-//
-//     pub fn transform_query(&self, x: &[f32]) -> Vec<f32> {
-//         let mut x_new = Vec::with_capacity(x.len() + self.m);
-//
-//         // normalize query to have l2 == 1.
-//         let l2 = l2_norm(x);
-//         for x_i in x {
-//             x_new.push(x_i / l2)
-//         }
-//
-//         for _ in 0..self.m {
-//             x_new.push(0.5)
-//         }
-//         x_new
-//     }
-// }
-//
-// impl VecHash for MIPS {
-//     fn hash_vec_query(&self, v: &[f32]) -> Hash {
-//         let q = self.transform_query(v);
-//         self.hasher.hash_vec_query(&q)
-//     }
-//
-//     fn hash_vec_put(&self, v: &[f32]) -> Hash {
-//         let p = self.tranform_put(v);
-//         self.hasher.hash_vec_query(&p)
-//     }
-// }
-//
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//
-//     #[test]
-//     fn test_l2() {
-//         // Only test if it runs
-//         let l2 = L2::new(5, 2.2, 7, 1);
-//         // two close vector
-//         let h1 = l2.hash_vec_query(&[1., 2., 3., 1., 3.]);
-//         let h2 = l2.hash_vec_query(&[1.1, 2., 3., 1., 3.1]);
-//
-//         // a distant vec
-//         let h3 = l2.hash_vec_query(&[100., 100., 100., 100., 100.1]);
-//
-//         println!("close: {:?} distant: {:?}", (&h1, &h2), &h3);
-//         assert_eq!(h1, h2);
-//         assert_ne!(h1, h3);
-//     }
-// }
+/// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MIPS<N> {
+    U: N,
+    M: N,
+    m: usize,
+    dim: usize,
+    hasher: L2<N>,
+}
+
+impl<N: Numeric + Float> MIPS<N> {
+    pub fn new(dim: usize, r: f32, U: N, m: usize, n_projections: usize, seed: u64) -> Self {
+        let l2 = L2::new(dim + m, r, n_projections, seed);
+        MIPS {
+            U,
+            M: Zero::zero(),
+            m,
+            dim,
+            hasher: l2,
+        }
+    }
+
+    pub fn fit(&mut self, v: &[N]) {
+        // TODO: add fit to vechash trait?
+        let mut max_l2 = Zero::zero();
+        for x in v.chunks(self.dim) {
+            let l2 = l2_norm(x);
+            if l2 > max_l2 {
+                max_l2 = l2
+            }
+        }
+        self.M = max_l2
+    }
+
+    pub fn tranform_put(&self, x: &[N]) -> Vec<N> {
+        let mut x_new = Vec::with_capacity(x.len() + self.m);
+
+        if self.M == Zero::zero() {
+            panic!("MIPS is not fitted")
+        }
+
+        // shrink norm such that l2 norm < U < 1.
+        for x_i in x.iter().cloned() {
+            x_new.push(x_i / self.M * self.U)
+        }
+
+        let norm_sq = l2_norm(&x_new).powf(N::from_f32(2.).unwrap());
+        for i in 1..(self.m + 1) {
+            x_new.push(norm_sq.powf(N::from_usize(i).unwrap()))
+        }
+        x_new
+    }
+
+    pub fn transform_query(&self, x: &[N]) -> Vec<N> {
+        let mut x_new = Vec::with_capacity(x.len() + self.m);
+
+        // normalize query to have l2 == 1.
+        let l2 = l2_norm(x);
+        for x_i in x.iter().cloned() {
+            x_new.push(x_i / l2)
+        }
+
+        let half = N::from_f32(0.5).unwrap();
+        for _ in 0..self.m {
+            x_new.push(half)
+        }
+        x_new
+    }
+}
+
+impl<N: Numeric + Float> VecHash<N> for MIPS<N> {
+    fn hash_vec_query(&self, v: &[N]) -> Hash {
+        let q = self.transform_query(v);
+        self.hasher.hash_vec_query(&q)
+    }
+
+    fn hash_vec_put(&self, v: &[N]) -> Hash {
+        let p = self.tranform_put(v);
+        self.hasher.hash_vec_query(&p)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_l2() {
+        // Only test if it runs
+        let l2 = L2::new(5, 2.2, 7, 1);
+        // two close vector
+        let h1 = l2.hash_vec_query(&[1., 2., 3., 1., 3.]);
+        let h2 = l2.hash_vec_query(&[1.1, 2., 3., 1., 3.1]);
+
+        // a distant vec
+        let h3 = l2.hash_vec_query(&[10., 10., 10., 10., 10.1]);
+
+        println!("close: {:?} distant: {:?}", (&h1, &h2), &h3);
+        assert_eq!(h1, h2);
+        assert_ne!(h1, h3);
+    }
+}
