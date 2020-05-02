@@ -1,8 +1,6 @@
 use crate::data::Numeric;
 use crate::utils::create_rng;
-use crate::{
-    DataPointSlice, Error, FloatSize, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH,
-};
+use crate::{Error, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH};
 use fnv::FnvHashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;

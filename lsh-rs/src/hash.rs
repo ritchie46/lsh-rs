@@ -1,7 +1,4 @@
-use crate::{
-    data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng,
-    DataPointSlice, FloatSize,
-};
+use crate::{data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;

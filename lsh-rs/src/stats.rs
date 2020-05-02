@@ -1,7 +1,4 @@
-use crate::{
-    data::Numeric, dist::l2_norm, hash::HashPrimitive, DataPoint, HashTables, LshMem, Result,
-    VecHash,
-};
+use crate::{dist::l2_norm, hash::HashPrimitive, HashTables, LshMem, Result, VecHash};
 use fnv::FnvHashSet;
 use ndarray::aview1;
 use rayon::prelude::*;
@@ -59,7 +56,7 @@ pub struct OptRes {
 
 fn lsh_to_result<T: 'static + VecHash<f32> + Send + Sync + Clone>(
     lsh: LshMem<f32, T>,
-    vs: &[DataPoint],
+    vs: &[Vec<f32>],
     k: usize,
     l: usize,
 ) -> Result<OptRes> {
@@ -114,7 +111,7 @@ pub fn optimize_srp_params(
     cosine_sim: f64,
     dim: usize,
     k: &[usize],
-    vs: &[DataPoint],
+    vs: &[Vec<f32>],
 ) -> Result<Vec<OptRes>> {
     let mut params = vec![];
     let p1 = srp_ph(cosine_sim);
@@ -144,7 +141,7 @@ pub fn optimize_l2_params(
     delta: f64,
     dim: usize,
     k: &[usize],
-    vs: &[DataPoint],
+    vs: &[Vec<f32>],
 ) -> Result<Vec<OptRes>> {
     let mut params = vec![];
     let r = 4.0;

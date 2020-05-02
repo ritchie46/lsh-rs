@@ -157,8 +157,5 @@ pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_
 pub mod data;
 pub mod stats;
 
-pub type FloatSize = f32;
-pub type DataPoint = Vec<f32>;
-pub type DataPointSlice = [f32];
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;

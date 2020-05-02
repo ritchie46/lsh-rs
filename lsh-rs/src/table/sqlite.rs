@@ -3,7 +3,7 @@ use crate::data::Numeric;
 use crate::{
     constants::DESCRIBE_MAX,
     hash::{Hash, HashPrimitive},
-    DataPointSlice, Error, HashTables, Result, VecHash,
+    Error, HashTables, Result, VecHash,
 };
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, NO_PARAMS};

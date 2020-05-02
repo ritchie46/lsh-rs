@@ -3,9 +3,8 @@ use crate::{
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
     table::{general::HashTables, mem::MemoryTable, sqlite_mem::SqlTableMem},
     utils::create_rng,
-    Error, FloatSize, Result,
+    Error, Result, SqlTable,
 };
-use crate::{DataPoint, DataPointSlice, SqlTable};
 use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use itertools::Itertools;

@@ -4,7 +4,7 @@ use crate::{
     hash::{Hash, HashPrimitive},
     table::general::{Bucket, HashTables},
     utils::{all_eq, increase_capacity},
-    DataPoint, DataPointSlice, Error, Result,
+    Error, Result,
 };
 use fnv::{FnvHashMap as HashMap, FnvHashSet};
 use serde::{Deserialize, Serialize};

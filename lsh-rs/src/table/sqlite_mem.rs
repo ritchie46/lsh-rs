@@ -3,7 +3,7 @@ use crate::{
     data::Numeric,
     hash::{Hash, HashPrimitive},
     table::general::Bucket,
-    DataPoint, DataPointSlice, HashTables, Result,
+    HashTables, Result,
 };
 use fnv::FnvHashSet;
 use std::ops::{Deref, DerefMut};

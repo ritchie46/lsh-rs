@@ -1,7 +1,7 @@
 use crate::{
     data::Numeric,
     hash::{Hash, HashPrimitive},
-    DataPoint, DataPointSlice, Error, Result, VecHash,
+    Error, Result, VecHash,
 };
 use fnv::{FnvHashSet as HashSet, FnvHashSet};
 use serde::{de::DeserializeOwned, Serialize};
