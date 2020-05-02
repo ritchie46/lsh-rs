@@ -31,12 +31,12 @@ fn store_n(n: usize, dim: usize, index_only: bool) -> LshMem<f32, SignRandomProj
 
 #[bench]
 fn bench_storing(b: &mut Bencher) {
-    b.iter(|| store_n(100, 100, false))
+    b.iter(|| store_n(1000, 100, false))
 }
 
 #[bench]
 fn bench_storing_index_only(b: &mut Bencher) {
-    b.iter(|| store_n(100, 100, true))
+    b.iter(|| store_n(1000, 100, true))
 }
 
 #[bench]

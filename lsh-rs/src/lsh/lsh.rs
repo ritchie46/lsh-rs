@@ -217,12 +217,12 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
         let hashers = &self.hashers;
         crossbeam::scope(|s| {
             s.spawn(|_| {
-                vs.iter().for_each(|v| {
-                    for (i, proj) in hashers.iter().enumerate() {
+                for (i, proj) in hashers.iter().enumerate() {
+                    vs.iter().for_each(|v| {
                         let hash = proj.hash_vec_put(v);
                         tx.send((hash, v, i)).unwrap();
-                    }
-                });
+                    })
+                }
                 drop(tx)
             });
         })
@@ -263,12 +263,12 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
         let hashers = &self.hashers;
         crossbeam::scope(|s| {
             s.spawn(|_| {
-                vs.axis_iter(Axis(0)).for_each(|v| {
-                    for (i, proj) in hashers.iter().enumerate() {
+                for (i, proj) in hashers.iter().enumerate() {
+                    vs.axis_iter(Axis(0)).for_each(|v| {
                         let hash = proj.hash_vec_put(v.as_slice().unwrap());
                         tx.send((hash, v, i)).unwrap();
-                    }
-                });
+                    })
+                }
                 drop(tx)
             });
         })
