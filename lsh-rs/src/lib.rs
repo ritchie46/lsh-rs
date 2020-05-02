@@ -20,6 +20,7 @@
 //!         - MIPS
 //!     - **Query directed probing**
 //!         - L2
+//! * Generic numeric types
 //!
 //! ## Getting started
 //!
@@ -133,7 +134,6 @@
 #![allow(dead_code, non_snake_case)]
 #[cfg(feature = "blas")]
 extern crate blas_src;
-extern crate crossbeam;
 extern crate ndarray;
 mod hash;
 mod lsh {

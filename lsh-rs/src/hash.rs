@@ -9,16 +9,21 @@ use serde::{Deserialize, Serialize};
 pub type HashPrimitive = i8;
 pub type Hash = Vec<HashPrimitive>;
 
+/// Implement this trait to create your own custom hashers.
+/// In case of a symmetrical hash function, only `hash_vec_query` needs to be implemented.
 pub trait VecHash<N> {
+    /// Create a hash for a query data point.
     fn hash_vec_query(&self, v: &[N]) -> Hash;
-    fn hash_vec_put(&self, v: &[N]) -> Hash;
+    /// Create a hash for a data point that is being stored.
+    fn hash_vec_put(&self, v: &[N]) -> Hash {
+        self.hash_vec_query(v)
+    }
 
     fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N>> {
         None
     }
 }
 
-/// Also called SimHash.
 /// A family of hashers for the cosine similarity.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SignRandomProjections<N: Numeric> {
@@ -52,10 +57,6 @@ impl<N: Numeric> SignRandomProjections<N> {
 
 impl<N: Numeric> VecHash<N> for SignRandomProjections<N> {
     fn hash_vec_query(&self, v: &[N]) -> Hash {
-        self.hash_vec(v)
-    }
-
-    fn hash_vec_put(&self, v: &[N]) -> Hash {
         self.hash_vec(v)
     }
 }
@@ -107,10 +108,6 @@ impl<N: Numeric + Float> L2<N> {
 
 impl<N: Numeric + Float> VecHash<N> for L2<N> {
     fn hash_vec_query(&self, v: &[N]) -> Hash {
-        self.hash_and_cast_vec(v)
-    }
-
-    fn hash_vec_put(&self, v: &[N]) -> Hash {
         self.hash_and_cast_vec(v)
     }
 

@@ -1,3 +1,4 @@
+use crate::table::general::Bucket;
 use crate::{
     data::Numeric,
     hash::{Hash, SignRandomProjections, VecHash, L2, MIPS},
@@ -5,7 +6,6 @@ use crate::{
     utils::create_rng,
     Error, Result, SqlTable,
 };
-use crossbeam::channel::unbounded;
 use fnv::FnvHashSet as HashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
@@ -212,26 +212,18 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
             .unwrap()
             .increase_storage(vs.len());
 
-        // one thread prepares hashes, while the other loads the hashes in the hashtables.
-        let (tx, rx) = unbounded();
-        let hashers = &self.hashers;
-        crossbeam::scope(|s| {
-            s.spawn(|_| {
-                for (i, proj) in hashers.iter().enumerate() {
-                    vs.iter().for_each(|v| {
-                        let hash = proj.hash_vec_put(v);
-                        tx.send((hash, v, i)).unwrap();
-                    })
-                }
-                drop(tx)
-            });
-        })
-        .expect("something went wrong in the thread that prepares the hashes.");
-
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
-        for (hash, v, i) in rx {
-            insert_idx.push(ht.put(hash, &v, i)?);
+        for (i, proj) in self.hashers.iter().enumerate() {
+            for v in vs.iter() {
+                let hash = proj.hash_vec_put(v);
+                match (ht.put(hash, v, i), i) {
+                    // only for the first hash table save the index as it will be the same for all
+                    (Ok(idx), 0) => insert_idx.push(idx),
+                    (Err(e), _) => return Err(e),
+                    _ => {}
+                }
+            }
         }
         self.hash_tables.replace(ht);
         Ok(insert_idx)
@@ -258,26 +250,18 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
             .unwrap()
             .increase_storage(vs.len());
 
-        // one thread prepares hashes, while the other loads the hashes in the hashtables.
-        let (tx, rx) = unbounded();
-        let hashers = &self.hashers;
-        crossbeam::scope(|s| {
-            s.spawn(|_| {
-                for (i, proj) in hashers.iter().enumerate() {
-                    vs.axis_iter(Axis(0)).for_each(|v| {
-                        let hash = proj.hash_vec_put(v.as_slice().unwrap());
-                        tx.send((hash, v, i)).unwrap();
-                    })
-                }
-                drop(tx)
-            });
-        })
-        .expect("something went wrong in the thread that prepares the hashes.");
-
         let mut ht = self.hash_tables.take().unwrap();
         let mut insert_idx = Vec::with_capacity(vs.len());
-        for (hash, v, i) in rx {
-            insert_idx.push(ht.put(hash, v.as_slice().unwrap(), i)?);
+        for (i, proj) in self.hashers.iter().enumerate() {
+            for v in vs.axis_iter(Axis(0)) {
+                let hash = proj.hash_vec_put(v.as_slice().unwrap());
+                match (ht.put(hash, v.as_slice().unwrap(), i), i) {
+                    // only for the first hash table save the index as it will be the same for all
+                    (Ok(idx), 0) => insert_idx.push(idx),
+                    (Err(e), _) => return Err(e),
+                    _ => {}
+                }
+            }
         }
         self.hash_tables.replace(ht);
         Ok(insert_idx)
@@ -423,7 +407,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
         Ok(())
     }
 
-    fn query_bucket_union(&self, v: &[N]) -> Result<HashSet<u32>> {
+    fn query_bucket_union(&self, v: &[N]) -> Result<Bucket> {
         self.validate_vec(v)?;
         if self._multi_probe {
             return self.multi_probe_bucket_union(v);
@@ -506,7 +490,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
         &self,
         hash: &Hash,
         hash_table_idx: usize,
-        bucket_union: &mut HashSet<u32>,
+        bucket_union: &mut Bucket,
     ) -> Result<()> {
         match self
             .hash_tables
