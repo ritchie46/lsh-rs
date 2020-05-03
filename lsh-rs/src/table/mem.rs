@@ -59,6 +59,7 @@ impl<N> MemoryTable<N> {
         }
     }
     fn insert_idx(&mut self, idx: u32, hash: Hash, hash_table: usize) {
+        debug_assert!(hash_table < self.n_hash_tables);
         let tbl = unsafe { self.hash_tables.get_unchecked_mut(hash_table) };
         let bucket = tbl.entry(hash).or_insert_with(|| FnvHashSet::default());
         bucket.insert(idx);

@@ -48,6 +48,7 @@ pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<HashPrimitive> 
 
     let mut rng = create_rng(0);
     for i in candidate_idx {
+        debug_assert!(i < permut.len());
         let v = *shift_options.choose(&mut rng).unwrap();
         // bounds check not needed as i cannot be larger than permut
         unsafe { *permut.get_unchecked_mut(i) += v }
@@ -299,7 +300,7 @@ where
     }
 }
 
-impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<H, N, T> {
     pub fn multi_probe_bucket_union(&self, v: &[N]) -> Result<FnvHashSet<u32>> {
         self.validate_vec(v)?;
         let mut bucket_union = FnvHashSet::default();

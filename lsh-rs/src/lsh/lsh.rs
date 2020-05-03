@@ -6,7 +6,7 @@ use crate::{
     utils::create_rng,
     Error, Result, SqlTable,
 };
-use fnv::FnvHashSet as HashSet;
+use fnv::FnvHashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
 use num::Float;
@@ -16,11 +16,12 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
+use std::marker::PhantomData;
 use std::path::Path;
 
-pub type LshSql<N, H> = LSH<N, SqlTable<N>, H>;
-pub type LshSqlMem<N, H> = LSH<N, SqlTableMem<N>, H>;
-pub type LshMem<N, H> = LSH<N, MemoryTable<N>, H>;
+pub type LshSql<N, H> = LSH<H, N, SqlTable<N>>;
+pub type LshSqlMem<N, H> = LSH<H, N, SqlTableMem<N>>;
+pub type LshMem<N, H> = LSH<H, N, MemoryTable<N>>;
 
 /// Wrapper for LSH functionality.
 /// Can be initialized following the Builder pattern.
@@ -44,7 +45,12 @@ pub type LshMem<N, H> = LSH<N, MemoryTable<N>, H>;
 /// * [set_database_file](struct.LSH.html#method.set_database_file)
 /// * [multi_probe](struct.LSH.html#method.multi_probe)
 /// * [increase_storage](struct.LSH.html#method.increase_storage)
-pub struct LSH<N: Numeric, T: HashTables<N>, H: VecHash<N>> {
+pub struct LSH<H, N, T>
+where
+    N: Numeric,
+    H: VecHash<N>,
+    T: HashTables<N>,
+{
     /// Number of hash tables. `L` in literature.
     pub n_hash_tables: usize,
     /// Number of hash functions. `K` in literature.
@@ -63,8 +69,7 @@ pub struct LSH<N: Numeric, T: HashTables<N>, H: VecHash<N>> {
     /// multi probe budget
     pub(crate) _multi_probe_budget: usize,
     _db_path: String,
-    // TODO: Delete
-    _type: Option<N>,
+    phantom: PhantomData<N>,
 }
 
 /// Create a new LSH instance. Used in the builder pattern
@@ -73,9 +78,9 @@ fn lsh_from_lsh<
     T: HashTables<N>,
     H: VecHash<N> + Serialize + DeserializeOwned,
 >(
-    lsh: &mut LSH<N, T, H>,
+    lsh: &mut LSH<H, N, T>,
     hashers: Vec<H>,
-) -> Result<LSH<N, T, H>> {
+) -> Result<LSH<H, N, T>> {
     let mut ht = *T::new(lsh.n_hash_tables, lsh.only_index_storage, &lsh._db_path)?;
 
     // Load hashers if store hashers fails. (i.e. exists)
@@ -97,12 +102,12 @@ fn lsh_from_lsh<
         _multi_probe: lsh._multi_probe,
         _multi_probe_budget: lsh._multi_probe_budget,
         _db_path: lsh._db_path.clone(),
-        _type: None,
+        phantom: PhantomData,
     };
     Ok(lsh)
 }
 
-impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, SignRandomProjections<N>> {
+impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<SignRandomProjections<N>, N, T> {
     /// Create a new SignRandomProjections LSH
     pub fn srp(&mut self) -> Result<Self> {
         let mut rng = create_rng(self._seed);
@@ -117,7 +122,7 @@ impl<N: Numeric + DeserializeOwned, T: HashTables<N>> LSH<N, T, SignRandomProjec
     }
 }
 
-impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2<N>> {
+impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<L2<N>, N, T> {
     /// Create a new L2 LSH
     ///
     /// See hash function:
@@ -141,7 +146,7 @@ impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, L2<N>> {
     }
 }
 
-impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS<N>> {
+impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<MIPS<N>, N, T> {
     /// Create a new MIPS LSH
     ///
     /// Async hasher
@@ -167,7 +172,7 @@ impl<N: Numeric + Float + DeserializeOwned, T: HashTables<N>> LSH<N, T, MIPS<N>>
     }
 }
 
-impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<H, N, T> {
     /// Query bucket collision for a batch of data points in parallel.
     ///
     /// # Arguments
@@ -190,7 +195,7 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N> + Sync> LSH<N, T, H> {
     }
 }
 
-impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<H, N, T> {
     /// Store multiple vectors in storage. Before storing the storage capacity is possibly
     /// increased to match the data points.
     ///
@@ -268,7 +273,7 @@ impl<N: Numeric, H: VecHash<N> + Sync, T: HashTables<N>> LSH<N, T, H> {
     }
 }
 
-impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
+impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<H, N, T> {
     /// Create a new Base LSH
     ///
     /// # Arguments
@@ -289,7 +294,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
             _multi_probe: false,
             _multi_probe_budget: 16,
             _db_path: "./lsh.db3".to_string(),
-            _type: None,
+            phantom: PhantomData,
         };
         lsh
     }
@@ -413,7 +418,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
             return self.multi_probe_bucket_union(v);
         }
 
-        let mut bucket_union = HashSet::default();
+        let mut bucket_union = FnvHashSet::default();
 
         for (i, proj) in self.hashers.iter().enumerate() {
             let hash = proj.hash_vec_query(v);
@@ -508,7 +513,7 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<N, T, H> {
     }
 }
 
-impl<N: Numeric, T: VecHash<N> + Serialize> LSH<N, SqlTable<N>, T> {
+impl<N: Numeric, H: VecHash<N> + Serialize> LSH<H, N, SqlTable<N>> {
     /// Commit SqlTable backend
     pub fn commit(&mut self) -> Result<()> {
         let ht = self.hash_tables.as_mut().unwrap();
@@ -536,7 +541,7 @@ struct IntermediatBlob {
     _seed: u64,
 }
 
-impl<N, H> LSH<N, MemoryTable<N>, H>
+impl<N, H> LSH<H, N, MemoryTable<N>>
 where
     H: Serialize + DeserializeOwned + VecHash<N>,
     N: Numeric + DeserializeOwned,
