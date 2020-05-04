@@ -1,10 +1,7 @@
 use super::general::Bucket;
-use crate::data::Numeric;
-use crate::{
-    constants::DESCRIBE_MAX,
-    hash::{Hash, HashPrimitive},
-    Error, HashTables, Result, VecHash,
-};
+use crate::constants::DESCRIBE_MAX;
+use crate::data::{Integer, Numeric};
+use crate::prelude::*;
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, NO_PARAMS};
 use serde::de::DeserializeOwned;
@@ -51,7 +48,12 @@ fn make_table(table_name: &str, connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn insert_table(table_name: &str, hash: &Hash, idx: u32, connection: &Connection) -> Result<usize> {
+fn insert_table<K>(
+    table_name: &str,
+    hash: &Vec<K>,
+    idx: u32,
+    connection: &Connection,
+) -> Result<usize> {
     let blob = vec_to_blob(hash);
     let mut stmt = connection.prepare_cached(&format!(
         "
@@ -101,14 +103,18 @@ FROM (
 ///
 /// State will be save during sessions. The database is automatically
 /// loaded if [LSH](struct.LSH.html) can find the database file (defaults to `./lsh.db3`.
-pub struct SqlTable<N: Numeric> {
+pub struct SqlTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
     n_hash_tables: usize,
     only_index_storage: bool, // for now only supported
     counter: u32,
     pub conn: Connection,
     table_names: Vec<String>,
     pub committed: Cell<bool>,
-    phantom: PhantomData<N>,
+    phantom: PhantomData<(N, K)>,
 }
 
 fn fmt_table_name(hash_table: usize) -> String {
@@ -124,10 +130,7 @@ fn get_table_names(n_hash_tables: usize) -> Vec<String> {
     table_names
 }
 
-fn get_unique_hash_int(
-    n_hash_tables: usize,
-    conn: &Connection,
-) -> Result<FnvHashSet<HashPrimitive>> {
+fn get_unique_hash_int(n_hash_tables: usize, conn: &Connection) -> Result<FnvHashSet<i32>> {
     let mut hash_numbers = FnvHashSet::default();
     for table_name in get_table_names(n_hash_tables) {
         let mut stmt = conn.prepare(&format!["SELECT hash FROM {} LIMIT 100;", table_name])?;
@@ -161,7 +164,11 @@ fn init_db_setttings(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-impl<N: Numeric> SqlTable<N> {
+impl<N, K> SqlTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
     fn get_table_name_put(&self, hash_table: usize) -> Result<&str> {
         let opt = self.table_names.get(hash_table);
         match opt {
@@ -174,7 +181,7 @@ impl<N: Numeric> SqlTable<N> {
         n_hash_tables: usize,
         only_index_storage: bool,
         conn: Connection,
-    ) -> Result<SqlTable<N>> {
+    ) -> Result<Self> {
         let table_names = get_table_names(n_hash_tables);
         init_db_setttings(&conn)?;
         init_table(&conn, &table_names)?;
@@ -229,14 +236,18 @@ impl<N: Numeric> SqlTable<N> {
     }
 }
 
-impl<N: Numeric> HashTables<N> for SqlTable<N> {
+impl<N, K> HashTables<N, K> for SqlTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
     fn new(n_hash_tables: usize, only_index_storage: bool, db_path: &str) -> Result<Box<Self>> {
         let path = std::path::Path::new(db_path);
         let conn = Connection::open(path)?;
         SqlTable::init_from_conn(n_hash_tables, only_index_storage, conn).map(|tbl| Box::new(tbl))
     }
 
-    fn put(&mut self, hash: Hash, _d: &[N], hash_table: usize) -> Result<u32> {
+    fn put(&mut self, hash: Vec<K>, _d: &[N], hash_table: usize) -> Result<u32> {
         // the unique id of the unique vector
         let idx = self.counter;
 
@@ -257,7 +268,7 @@ impl<N: Numeric> HashTables<N> for SqlTable<N> {
     }
 
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket> {
+    fn query_bucket(&self, hash: &[K], hash_table: usize) -> Result<Bucket> {
         self.commit()?;
         let table_name = fmt_table_name(hash_table);
         let blob = vec_to_blob(hash);
@@ -308,7 +319,7 @@ WHERE type='table' AND type LIKE '%hash%';"#,
         Ok(out)
     }
 
-    fn store_hashers<H: VecHash<N> + Serialize>(&mut self, hashers: &[H]) -> Result<()> {
+    fn store_hashers<H: VecHash<N, K> + Serialize>(&mut self, hashers: &[H]) -> Result<()> {
         let buf: Vec<u8> = bincode::serialize(hashers)?;
 
         // fails if already exists
@@ -328,7 +339,7 @@ WHERE type='table' AND type LIKE '%hash%';"#,
         Ok(())
     }
 
-    fn load_hashers<H: VecHash<N> + DeserializeOwned>(&self) -> Result<Vec<H>> {
+    fn load_hashers<H: VecHash<N, K> + DeserializeOwned>(&self) -> Result<Vec<H>> {
         let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
         let buf: Vec<u8> = stmt.query_row(NO_PARAMS, |row| {
             let v: Vec<u8> = row.get_unwrap(0);
@@ -338,7 +349,7 @@ WHERE type='table' AND type LIKE '%hash%';"#,
         Ok(hashers)
     }
 
-    fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive> {
+    fn get_unique_hash_int(&self) -> FnvHashSet<i32> {
         get_unique_hash_int(self.n_hash_tables, &self.conn).unwrap()
     }
 }
@@ -350,7 +361,7 @@ mod test {
 
     #[test]
     fn test_sql_table_init() {
-        let sql = SqlTableMem::<f32>::new(1, true, ".").unwrap();
+        let sql = SqlTableMem::<f32, i8>::new(1, true, ".").unwrap();
         let mut stmt = sql
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
@@ -393,7 +404,7 @@ mod test {
 
     #[test]
     fn test_in_mem_to_disk() {
-        let mut sql = *SqlTableMem::new(1, true, ".").unwrap();
+        let mut sql = *SqlTableMem::<f32, i8>::new(1, true, ".").unwrap();
         let v = vec![1., 2.];
         for hash in &[vec![1, 2], vec![2, 3]] {
             sql.put(hash.clone(), &v, 0).unwrap();
@@ -402,7 +413,7 @@ mod test {
         let p = "./delete.db3";
         sql.to_db(p).unwrap();
 
-        let mut sql = SqlTable::<f32>::new(1, true, p).unwrap();
+        let mut sql = SqlTable::<f32, i8>::new(1, true, p).unwrap();
         sql.to_mem().unwrap();
         assert_eq!(sql.query_bucket(&vec![1, 2], 0).unwrap().take(&0), Some(0));
         std::fs::remove_file(p).unwrap();

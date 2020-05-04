@@ -1,4 +1,5 @@
-use crate::{dist::l2_norm, hash::HashPrimitive, HashTables, LshMem, Result, VecHash};
+use crate::dist::l2_norm;
+use crate::prelude::*;
 use fnv::FnvHashSet;
 use ndarray::aview1;
 use rayon::prelude::*;
@@ -51,11 +52,11 @@ pub struct OptRes {
     pub min_len: usize,
     pub max_len: usize,
     pub avg_len: f32,
-    pub unique_hash_values: FnvHashSet<HashPrimitive>,
+    pub unique_hash_values: FnvHashSet<i32>,
 }
 
-fn lsh_to_result<T: 'static + VecHash<f32> + Send + Sync + Clone>(
-    lsh: LshMem<f32, T>,
+fn lsh_to_result<H: 'static + VecHash<f32, i8> + Send + Sync + Clone>(
+    lsh: LshMem<H, f32, i8>,
     vs: &[Vec<f32>],
     k: usize,
     l: usize,

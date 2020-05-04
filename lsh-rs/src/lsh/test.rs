@@ -1,6 +1,5 @@
 #![cfg(test)]
-use super::lsh::*;
-use crate::MemoryTable;
+use crate::prelude::*;
 
 #[test]
 fn test_hash_table() {
@@ -20,13 +19,17 @@ fn test_hash_table() {
 #[test]
 fn test_index_only() {
     // Test if vec storage is increased
-    let mut lsh: LshMem<f32, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
+    let mut lsh = hi8::LshMem::new(5, 9, 3).seed(1).l2(2.).unwrap();
     let v1 = &[2., 3., 4.];
     lsh.store_vec(v1).unwrap();
     assert_eq!(lsh.hash_tables.unwrap().vec_store.map.len(), 1);
 
     // Test if vec storage is empty
-    let mut lsh: LshMem<f32, _> = LSH::new(5, 9, 3).seed(1).only_index().l2(2.).unwrap();
+    let mut lsh = hi8::LshMem::new(5, 9, 3)
+        .seed(1)
+        .only_index()
+        .l2(2.)
+        .unwrap();
     lsh.store_vec(v1).unwrap();
     assert_eq!(lsh.hash_tables.as_ref().unwrap().vec_store.map.len(), 0);
     lsh.query_bucket_ids(v1).unwrap();
@@ -34,7 +37,7 @@ fn test_index_only() {
 
 #[test]
 fn test_serialization() {
-    let mut lsh: LshMem<f32, _> = LSH::new(5, 9, 3).seed(1).l2(2.).unwrap();
+    let mut lsh = hi8::LshMem::new(5, 9, 3).seed(1).l2(2.).unwrap();
     let v1 = &[2., 3., 4.];
     lsh.store_vec(v1).unwrap();
     let mut tmp = std::env::temp_dir();
@@ -54,7 +57,7 @@ fn test_serialization() {
 fn test_db() {
     let v1 = &[2., 3., 4.];
     {
-        let mut lsh = LshSql::new(5, 2, 3).seed(2).srp().unwrap();
+        let mut lsh = hi8::LshSql::new(5, 2, 3).seed(2).srp().unwrap();
         lsh.store_vec(v1).unwrap();
         assert!(lsh.query_bucket_ids(v1).unwrap().contains(&0));
         lsh.commit().unwrap();
@@ -62,7 +65,7 @@ fn test_db() {
     }
 
     // tests if the same db is reused.
-    let lsh2 = LshSql::new(5, 2, 3).srp().unwrap();
+    let lsh2 = hi8::LshSql::new(5, 2, 3).srp().unwrap();
     lsh2.describe().unwrap();
     assert!(lsh2.query_bucket_ids(v1).unwrap().contains(&0));
 }
@@ -70,7 +73,7 @@ fn test_db() {
 #[test]
 fn test_mem_db() {
     let v1 = &[2., 3., 4.];
-    let mut lsh = LshSqlMem::new(5, 2, 3).seed(2).srp().unwrap();
+    let mut lsh = hi8::LshSqlMem::new(5, 2, 3).seed(2).srp().unwrap();
     lsh.store_vec(v1).unwrap();
     assert!(lsh.query_bucket_ids(v1).unwrap().contains(&0));
     lsh.describe().unwrap();

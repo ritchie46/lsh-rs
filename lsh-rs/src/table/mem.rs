@@ -1,10 +1,10 @@
+use crate::data::Integer;
 use crate::{
     constants::DESCRIBE_MAX,
     data::Numeric,
-    hash::{Hash, HashPrimitive},
+    prelude::*,
     table::general::{Bucket, HashTables},
     utils::{all_eq, increase_capacity},
-    Error, Result,
 };
 use fnv::{FnvHashMap as HashMap, FnvHashSet};
 use serde::{Deserialize, Serialize};
@@ -38,16 +38,24 @@ impl<N: Numeric> VecStore<N> {
 
 /// In memory backend for [LSH](struct.LSH.html).
 #[derive(Deserialize, Serialize)]
-pub struct MemoryTable<N> {
-    hash_tables: Vec<HashMap<Hash, Bucket>>,
+pub struct MemoryTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
+    hash_tables: Vec<HashMap<Vec<K>, Bucket>>,
     n_hash_tables: usize,
     pub vec_store: VecStore<N>,
     only_index_storage: bool,
     counter: u32,
 }
 
-impl<N> MemoryTable<N> {
-    fn remove_idx(&mut self, idx: u32, hash: &Hash, hash_table: usize) -> Result<()> {
+impl<N, K> MemoryTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
+    fn remove_idx(&mut self, idx: u32, hash: &[K], hash_table: usize) -> Result<()> {
         let tbl = &mut self.hash_tables[hash_table];
         let bucket = tbl.get_mut(hash);
         match bucket {
@@ -58,7 +66,7 @@ impl<N> MemoryTable<N> {
             }
         }
     }
-    fn insert_idx(&mut self, idx: u32, hash: Hash, hash_table: usize) {
+    fn insert_idx(&mut self, idx: u32, hash: Vec<K>, hash_table: usize) {
         debug_assert!(hash_table < self.n_hash_tables);
         let tbl = unsafe { self.hash_tables.get_unchecked_mut(hash_table) };
         let bucket = tbl.entry(hash).or_insert_with(|| FnvHashSet::default());
@@ -66,7 +74,11 @@ impl<N> MemoryTable<N> {
     }
 }
 
-impl<N: Numeric> HashTables<N> for MemoryTable<N> {
+impl<N, K> HashTables<N, K> for MemoryTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
     fn new(n_hash_tables: usize, only_index_storage: bool, _: &str) -> Result<Box<Self>> {
         // TODO: Check the average number of vectors in the buckets.
         // this way the capacity can be approximated by the number of DataPoints that will
@@ -83,7 +95,7 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
         Ok(Box::new(m))
     }
 
-    fn put(&mut self, hash: Hash, d: &[N], hash_table: usize) -> Result<u32> {
+    fn put(&mut self, hash: Vec<K>, d: &[N], hash_table: usize) -> Result<u32> {
         // Store hash and id/idx
         let idx = self.counter;
         self.insert_idx(idx, hash, hash_table);
@@ -100,7 +112,7 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
     }
 
     /// Expensive operation we need to do a linear search over all datapoints
-    fn delete(&mut self, hash: &Hash, d: &[N], hash_table: usize) -> Result<()> {
+    fn delete(&mut self, hash: &[K], d: &[N], hash_table: usize) -> Result<()> {
         // First find the data point in the VecStore
         let idx = match self.vec_store.position(d) {
             None => return Ok(()),
@@ -113,8 +125,8 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
 
     fn update_by_idx(
         &mut self,
-        old_hash: &Hash,
-        new_hash: Hash,
+        old_hash: &[K],
+        new_hash: Vec<K>,
         idx: u32,
         hash_table: usize,
     ) -> Result<()> {
@@ -124,7 +136,7 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
     }
 
     /// Query the whole bucket
-    fn query_bucket(&self, hash: &Hash, hash_table: usize) -> Result<Bucket> {
+    fn query_bucket(&self, hash: &[K], hash_table: usize) -> Result<Bucket> {
         let tbl = &self.hash_tables[hash_table];
         match tbl.get(hash) {
             None => Err(Error::NotFound),
@@ -145,15 +157,15 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
         let mut lengths = vec![];
         let mut max_len = 0;
         let mut min_len = 1000000;
-        let mut set: FnvHashSet<HashPrimitive> = FnvHashSet::default();
+        let mut set: FnvHashSet<i32> = FnvHashSet::default();
         // iterator over hash tables 0..L
         for map in self.hash_tables.iter() {
             // iterator over all hashes
             // zip to truncate at the describe maximum
             for ((k, v), _) in map.iter().zip(0..DESCRIBE_MAX) {
                 let len = v.len();
-                let hash_values: FnvHashSet<HashPrimitive> =
-                    FnvHashSet::from_iter(k.iter().copied());
+                let hash_values: FnvHashSet<i32> =
+                    FnvHashSet::from_iter(k.iter().map(|&k| k.to_i32().unwrap()));
                 set = set.union(&hash_values).copied().collect();
                 lengths.push(len);
                 if len > max_len {
@@ -184,13 +196,13 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
         Ok(out)
     }
 
-    fn get_unique_hash_int(&self) -> FnvHashSet<HashPrimitive> {
+    fn get_unique_hash_int(&self) -> FnvHashSet<i32> {
         let mut hash_numbers = FnvHashSet::default();
 
         for ht in &self.hash_tables {
             for ((hash, _), _i) in ht.iter().zip(0..100) {
                 for &v in hash {
-                    hash_numbers.insert(v);
+                    hash_numbers.insert(v.to_i32().unwrap());
                 }
             }
         }
@@ -198,7 +210,11 @@ impl<N: Numeric> HashTables<N> for MemoryTable<N> {
     }
 }
 
-impl<N> std::fmt::Debug for MemoryTable<N> {
+impl<N, K> std::fmt::Debug for MemoryTable<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "hash_tables:\nhash, \t buckets\n")?;
         for ht in self.hash_tables.iter() {

@@ -1,11 +1,10 @@
-use crate::data::Numeric;
-use crate::utils::create_rng;
-use crate::{Error, Hash, HashPrimitive, HashTables, Result, VecHash, L2, LSH};
+use crate::data::{Integer, Numeric};
+use crate::{prelude::*, utils::create_rng};
 use fnv::FnvHashSet;
 use itertools::Itertools;
 use ndarray::prelude::*;
 use ndarray::stack;
-use num::{Float, Zero};
+use num::{Float, One, Zero};
 use rand::distributions::Uniform;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -20,7 +19,8 @@ use std::collections::BinaryHeap;
 /// Retrieved from https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
 
 pub trait QueryDirectedProbe<N> {
-    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Hash>>;
+    type Hashes;
+    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Self::Hashes>;
 }
 
 fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
@@ -39,7 +39,7 @@ fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
     samples
 }
 
-pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<HashPrimitive> {
+pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<i8> {
     let mut permut = vec![0; hash_len];
     let shift_options = [-1i8, 1];
 
@@ -65,7 +65,7 @@ pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<HashPrimitive> 
 fn step_wise_perturb(
     hash_length: usize,
     n_perturbations: usize,
-) -> Box<dyn Iterator<Item = Vec<(usize, HashPrimitive)>>> {
+) -> Box<dyn Iterator<Item = Vec<(usize, i8)>>> {
     // TODO: later opt in for impl return type
     //       https://stackoverflow.com/questions/27646925/how-do-i-return-a-filter-iterator-from-a-function
     let idx = 0..hash_length * 2;
@@ -95,7 +95,7 @@ fn step_wise_perturb(
 /// then the two index shifts, three index shifts etc.
 ///
 /// This is done until the budget is depleted.
-pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<HashPrimitive>> {
+pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<i8>> {
     let mut hash_perturbs = Vec::with_capacity(budget);
 
     let n = hash_len as u64;
@@ -122,7 +122,7 @@ pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<HashPrimitiv
 }
 
 #[derive(PartialEq, Clone)]
-struct PerturbState<'a, N>
+struct PerturbState<'a, N, K>
 where
     N: Numeric + Float,
 {
@@ -134,14 +134,15 @@ where
     // We start with the first one, as this is the lowest score.
     selection: Vec<usize>,
     switchpoint: usize,
-    original_hash: Option<Hash>,
+    original_hash: Option<Vec<K>>,
 }
 
-impl<'a, N> PerturbState<'a, N>
+impl<'a, N, K> PerturbState<'a, N, K>
 where
     N: Numeric + Float,
+    K: Integer,
 {
-    fn new(z: &'a [usize], distances: &'a [N], switchpoint: usize, hash: Hash) -> Self {
+    fn new(z: &'a [usize], distances: &'a [N], switchpoint: usize, hash: Vec<K>) -> Self {
         PerturbState {
             z,
             distances,
@@ -161,17 +162,17 @@ where
     }
 
     // map zj value to (i, delta) as in paper
-    fn i_delta(&self) -> Vec<(usize, HashPrimitive)> {
+    fn i_delta(&self) -> Vec<(usize, K)> {
         let mut out = Vec::with_capacity(self.z.len());
         for &idx in self.selection.iter() {
             let zj = self.z[idx];
             let delta;
             let index;
             if zj >= self.switchpoint {
-                delta = 1;
+                delta = One::one();
                 index = zj - self.switchpoint;
             } else {
-                delta = -1;
+                delta = K::from_i8(-1).unwrap();
                 index = zj;
             }
             out.push((index, delta))
@@ -198,7 +199,7 @@ where
         self.check_bounds(max)
     }
 
-    fn gen_hash(&mut self) -> Hash {
+    fn gen_hash(&mut self) -> Vec<K> {
         let mut hash = self.original_hash.take().expect("hash already taken");
         for (i, delta) in self.i_delta() {
             let ptr = &mut hash[i];
@@ -209,38 +210,46 @@ where
 }
 
 // implement ordering so that we can create a min heap
-impl<N> Ord for PerturbState<'_, N>
+impl<N, K> Ord for PerturbState<'_, N, K>
 where
     N: Numeric + Float,
+    K: Integer,
 {
-    fn cmp(&self, other: &PerturbState<N>) -> Ordering {
+    fn cmp(&self, other: &PerturbState<N, K>) -> Ordering {
         self.partial_cmp(other).unwrap()
     }
 }
 
-impl<N> PartialOrd for PerturbState<'_, N>
+impl<N, K> PartialOrd for PerturbState<'_, N, K>
 where
     N: Numeric + Float,
+    K: Integer,
 {
-    fn partial_cmp(&self, other: &PerturbState<N>) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &PerturbState<N, K>) -> Option<Ordering> {
         other.score().partial_cmp(&self.score())
     }
 }
 
-impl<N> Eq for PerturbState<'_, N> where N: Numeric + Float {}
-
-impl<N> L2<N>
+impl<N, K> Eq for PerturbState<'_, N, K>
 where
     N: Numeric + Float,
+    K: Integer,
+{
+}
+
+impl<N, K> L2<N, K>
+where
+    N: Numeric + Float,
+    K: Integer,
 {
     /// Computes the distance between the query hash and the boundary of the slot r (W in the paper)
     ///
     /// As stated by Multi-Probe LSH paper:
     /// For δ ∈ {−1, +1}, let xi(δ) be the distance of q from the boundary of the slot
-    fn distance_to_bound(&self, q: &[N], hash: Option<&Hash>) -> (Array1<N>, Array1<N>) {
+    fn distance_to_bound(&self, q: &[N], hash: Option<&Vec<K>>) -> (Array1<N>, Array1<N>) {
         let hash = match hash {
             None => self.hash_vec(q).to_vec(),
-            Some(h) => h.iter().map(|&v| N::from_i8(v).unwrap()).collect_vec(),
+            Some(h) => h.iter().map(|&k| N::from(k).unwrap()).collect_vec(),
         };
         let f = self.a.dot(&aview1(q)) + &self.b;
         let xi_min1 = f - &aview1(&hash) * self.r;
@@ -249,11 +258,13 @@ where
     }
 }
 
-impl<N> QueryDirectedProbe<N> for L2<N>
+impl<N, K> QueryDirectedProbe<N> for L2<N, K>
 where
     N: Numeric + Float,
+    K: Integer,
 {
-    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Hash>> {
+    type Hashes = Vec<Vec<K>>;
+    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Self::Hashes> {
         // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
         // https://www.youtube.com/watch?v=c5DHtx5VxX8
         let hash = self.hash_vec_query(q);
@@ -300,7 +311,13 @@ where
     }
 }
 
-impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<H, N, T> {
+impl<N, K, H, T> LSH<H, N, T, K>
+where
+    N: Numeric,
+    K: Integer,
+    H: VecHash<N, K>,
+    T: HashTables<N, K>,
+{
     pub fn multi_probe_bucket_union(&self, v: &[N]) -> Result<FnvHashSet<u32>> {
         self.validate_vec(v)?;
         let mut bucket_union = FnvHashSet::default();
@@ -325,11 +342,11 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<H, N, T> {
                 self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
 
                 for pertub in &probing_seq {
-                    let hash = original_hash
+                    let hash: Vec<K> = original_hash
                         .iter()
                         .zip(pertub)
-                        .map(|(&a, &b)| a + b)
-                        .collect();
+                        .map(|(&a, &b)| a + K::from_i8(b).unwrap())
+                        .collect_vec();
                     self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
                 }
             }
@@ -341,7 +358,6 @@ impl<N: Numeric, H: VecHash<N>, T: HashTables<N>> LSH<H, N, T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::LshMem;
 
     #[test]
     fn test_permutation() {
@@ -415,7 +431,7 @@ mod test {
 
     #[test]
     fn test_query_directed_probe() {
-        let l2 = L2::new(4, 4., 3, 1);
+        let l2 = <L2>::new(4, 4., 3, 1);
         let hashes = l2.query_directed_probe(&[1., 2., 3., 1.], 4).unwrap();
         println!("{:?}", hashes)
     }
@@ -423,7 +439,7 @@ mod test {
     #[test]
     fn test_query_directed_bounds() {
         // if shift and expand operation have reached the end of the vecs an error should be returned
-        let mut lsh = LshMem::new(2, 1, 1).multi_probe(1000).l2(4.).unwrap();
+        let mut lsh = hi8::LshMem::new(2, 1, 1).multi_probe(1000).l2(4.).unwrap();
         lsh.store_vec(&[1.]).unwrap();
         assert!(lsh.query_bucket_ids(&[1.]).is_err())
     }

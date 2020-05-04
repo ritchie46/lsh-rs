@@ -1,25 +1,24 @@
+use crate::data::Integer;
 use crate::{data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use num::traits::NumCast;
 use num::{Float, Zero};
+use serde::export::PhantomData;
 use serde::{Deserialize, Serialize};
-
-pub type HashPrimitive = i8;
-pub type Hash = Vec<HashPrimitive>;
 
 /// Implement this trait to create your own custom hashers.
 /// In case of a symmetrical hash function, only `hash_vec_query` needs to be implemented.
-pub trait VecHash<N> {
+pub trait VecHash<N, K> {
     /// Create a hash for a query data point.
-    fn hash_vec_query(&self, v: &[N]) -> Hash;
+    fn hash_vec_query(&self, v: &[N]) -> Vec<K>;
     /// Create a hash for a data point that is being stored.
-    fn hash_vec_put(&self, v: &[N]) -> Hash {
+    fn hash_vec_put(&self, v: &[N]) -> Vec<K> {
         self.hash_vec_query(v)
     }
 
-    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N>> {
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, Hashes = Vec<Vec<K>>>> {
         None
     }
 }
@@ -45,7 +44,7 @@ impl<N: Numeric> SignRandomProjections<N> {
         SignRandomProjections { hyperplanes: hp }
     }
 
-    fn hash_vec(&self, v: &[N]) -> Hash {
+    fn hash_vec(&self, v: &[N]) -> Vec<i8> {
         let v = aview1(v);
         self.hyperplanes
             .t()
@@ -55,22 +54,27 @@ impl<N: Numeric> SignRandomProjections<N> {
     }
 }
 
-impl<N: Numeric> VecHash<N> for SignRandomProjections<N> {
-    fn hash_vec_query(&self, v: &[N]) -> Hash {
+impl<N: Numeric> VecHash<N, i8> for SignRandomProjections<N> {
+    fn hash_vec_query(&self, v: &[N]) -> Vec<i8> {
         self.hash_vec(v)
     }
 }
 
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)
 #[derive(Serialize, Deserialize, Clone)]
-pub struct L2<N> {
+pub struct L2<N = f32, K = i32> {
     pub a: Array2<N>,
     pub r: N,
     pub b: Array1<N>,
     n_projections: usize,
+    phantom: PhantomData<K>,
 }
 
-impl<N: Numeric + Float> L2<N> {
+impl<N, K> L2<N, K>
+where
+    N: Numeric + Float,
+    K: Integer,
+{
     pub fn new(dim: usize, r: f32, n_projections: usize, seed: u64) -> Self {
         let mut rng = create_rng(seed);
         let a = Array::random_using((n_projections, dim), StandardNormal, &mut rng);
@@ -87,6 +91,7 @@ impl<N: Numeric + Float> L2<N> {
             r,
             b,
             n_projections,
+            phantom: PhantomData,
         }
     }
 
@@ -94,11 +99,11 @@ impl<N: Numeric + Float> L2<N> {
         ((self.a.dot(&aview1(v)) + &self.b) / self.r).mapv(|x| x.floor())
     }
 
-    fn hash_and_cast_vec(&self, v: &[N]) -> Hash {
+    fn hash_and_cast_vec(&self, v: &[N]) -> Vec<K> {
         // not DRY. we don't call hash_vec to save function call.
         ((self.a.dot(&aview1(v)) + &self.b) / self.r)
             .mapv(|x| {
-                let hp: HashPrimitive = NumCast::from(x.floor())
+                let hp = NumCast::from(x.floor())
                     .expect("Hash value doesnt fit in the Hash number type i8");
                 hp
             })
@@ -106,27 +111,35 @@ impl<N: Numeric + Float> L2<N> {
     }
 }
 
-impl<N: Numeric + Float> VecHash<N> for L2<N> {
-    fn hash_vec_query(&self, v: &[N]) -> Hash {
+impl<N, K> VecHash<N, K> for L2<N, K>
+where
+    N: Numeric + Float,
+    K: Integer,
+{
+    fn hash_vec_query(&self, v: &[N]) -> Vec<K> {
         self.hash_and_cast_vec(v)
     }
 
-    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N>> {
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, Hashes = Vec<Vec<K>>>> {
         Some(self)
     }
 }
 
 /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
 #[derive(Serialize, Deserialize, Clone)]
-pub struct MIPS<N> {
+pub struct MIPS<N, K> {
     U: N,
     M: N,
     m: usize,
     dim: usize,
-    hasher: L2<N>,
+    hasher: L2<N, K>,
 }
 
-impl<N: Numeric + Float> MIPS<N> {
+impl<N, K> MIPS<N, K>
+where
+    N: Numeric + Float,
+    K: Integer,
+{
     pub fn new(dim: usize, r: f32, U: N, m: usize, n_projections: usize, seed: u64) -> Self {
         let l2 = L2::new(dim + m, r, n_projections, seed);
         MIPS {
@@ -186,13 +199,17 @@ impl<N: Numeric + Float> MIPS<N> {
     }
 }
 
-impl<N: Numeric + Float> VecHash<N> for MIPS<N> {
-    fn hash_vec_query(&self, v: &[N]) -> Hash {
+impl<N, K> VecHash<N, K> for MIPS<N, K>
+where
+    N: Numeric + Float,
+    K: Integer,
+{
+    fn hash_vec_query(&self, v: &[N]) -> Vec<K> {
         let q = self.transform_query(v);
         self.hasher.hash_vec_query(&q)
     }
 
-    fn hash_vec_put(&self, v: &[N]) -> Hash {
+    fn hash_vec_put(&self, v: &[N]) -> Vec<K> {
         let p = self.tranform_put(v);
         self.hasher.hash_vec_query(&p)
     }
@@ -205,7 +222,7 @@ mod test {
     #[test]
     fn test_l2() {
         // Only test if it runs
-        let l2 = L2::new(5, 2.2, 7, 1);
+        let l2 = <L2>::new(5, 2.2, 7, 1);
         // two close vector
         let h1 = l2.hash_vec_query(&[1., 2., 3., 1., 3.]);
         let h2 = l2.hash_vec_query(&[1.1, 2., 3., 1., 3.1]);

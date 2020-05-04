@@ -25,7 +25,7 @@
 //! ## Getting started
 //!
 //! ```rust
-//! use lsh_rs::LshMem;
+//! use lsh_rs::prelude::*;
 //! // 2 rows w/ dimension 3.
 //! let p = &[vec![1., 1.5, 2.],
 //!         vec![2., 1.1, -0.3]];
@@ -46,11 +46,11 @@
 //! ## Signed Random Projections
 //! LSH for maximum cosine similarity search.
 //! ```rust
-//! use lsh_rs::LshMem;
+//! use lsh_rs::prelude::*;
 //! let n_projections = 9;
 //! let n_hash_tables = 30;
 //! let dim = 10;
-//! let mut lsh = LshMem::<f64, _>::new(n_projections, n_hash_tables, dim).srp();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).srp();
 //! ```
 //!
 //! ## L2
@@ -58,18 +58,18 @@
 //!
 //! ```
 //! // hyper parameter r in https://arxiv.org/pdf/1411.3787.pdf (eq. 8)
-//! use lsh_rs::LshMem;
+//! use lsh_rs::prelude::*;
 //! let bucket_width = 2.2;
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).l2(bucket_width).unwrap();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).l2(bucket_width).unwrap();
 //! ```
 //!
 //! ## Maximum Inner Product (MIPS)
 //! LSH for maximum inner product search.
 //! ```rust
-//! use lsh_rs::LshMem;
+//! use lsh_rs::prelude::*;
 //! let bucket_width = 2.2;
 //! // l2(x) < U < 1.0
 //! let U = 0.83;
@@ -79,7 +79,7 @@
 //! let n_projections = 15;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh: LshMem<f32, _> = LshMem::new(n_projections, n_hash_tables, dim).mips(r, U, m).unwrap();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).mips(r, U, m).unwrap();
 //! ```
 //!
 //! ## Seed
@@ -87,11 +87,11 @@
 //! is taken from the system. If you want to have reproducable outcomes, you can set a manual seed.
 //!
 //! ```rust
-//! use lsh_rs::LshMem;
+//! use lsh_rs::prelude::*;
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).seed(12).srp();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).seed(12).srp();
 //! ```
 //!
 //! ## Unique indexes
@@ -99,11 +99,11 @@
 //! hash table). You can choose to only store unique indexes of the data points. The index ids are
 //! assigned in chronological order. This will drastically decrease the required memory.
 //! ```rust
-//! use lsh_rs::LshMem;
+//! use lsh_rs::prelude::*;
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim).only_index().srp();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).only_index().srp();
 //! ```
 //!
 //! ## Builder pattern methods
@@ -126,7 +126,7 @@
 //! # Or any other blas backend.
 //! blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}
 //! ```
-//! ## Backends
+//! ## Backendshttps://open.spotify.com/playlist/37i9dQZF1E36VTnFw4S0o1
 //! The [LSH struct](struct.LSH.html) is exposed with multiple backends that store the hashes.
 //! * in memory (fastest / can save state with serialization) [LshMem](type.LshMem.html)
 //! * SQLite (slower due to disk io, but automatic state preservation between sessions) [LshSql](type.LshSql.html)
@@ -151,11 +151,8 @@ mod table {
 mod constants;
 mod error;
 pub mod utils;
-pub use crate::lsh::lsh::{LshMem, LshSql, LshSqlMem, LSH};
-pub use hash::{Hash, HashPrimitive, SignRandomProjections, VecHash, L2, MIPS};
+pub use hash::{SignRandomProjections, VecHash, L2, MIPS};
 pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_mem::SqlTableMem};
 pub mod data;
+pub mod prelude;
 pub mod stats;
-
-pub use error::Error;
-pub type Result<T> = std::result::Result<T, Error>;
