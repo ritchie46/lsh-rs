@@ -18,9 +18,8 @@ use std::collections::BinaryHeap;
 /// Multi-Probe LSH: Efficient Indexing for High-Dimensional Similarity Search
 /// Retrieved from https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
 
-pub trait QueryDirectedProbe<N> {
-    type Hashes;
-    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Self::Hashes>;
+pub trait QueryDirectedProbe<N, K> {
+    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>>;
 }
 
 fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
@@ -258,13 +257,12 @@ where
     }
 }
 
-impl<N, K> QueryDirectedProbe<N> for L2<N, K>
+impl<N, K> QueryDirectedProbe<N, K> for L2<N, K>
 where
     N: Numeric + Float,
     K: Integer,
 {
-    type Hashes = Vec<Vec<K>>;
-    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Self::Hashes> {
+    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>> {
         // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
         // https://www.youtube.com/watch?v=c5DHtx5VxX8
         let hash = self.hash_vec_query(q);

@@ -18,7 +18,7 @@ pub trait VecHash<N, K> {
         self.hash_vec_query(v)
     }
 
-    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, Hashes = Vec<Vec<K>>>> {
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, K>> {
         None
     }
 }
@@ -120,7 +120,7 @@ where
         self.hash_and_cast_vec(v)
     }
 
-    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, Hashes = Vec<Vec<K>>>> {
+    fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, K>> {
         Some(self)
     }
 }
