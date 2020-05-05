@@ -22,6 +22,28 @@ pub trait QueryDirectedProbe<N, K> {
     fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>>;
 }
 
+pub trait StepWiseProbe<N, K>: VecHash<N, K>
+where
+    K: Integer,
+{
+    fn step_wise_probe(&self, q: &[N], budget: usize, hash_len: usize) -> Result<Vec<Vec<K>>> {
+        let probing_seq = step_wise_probing(hash_len, budget);
+        let original_hash = self.hash_vec_query(q);
+
+        let a = probing_seq
+            .iter()
+            .map(|pertub| {
+                original_hash
+                    .iter()
+                    .zip(pertub)
+                    .map(|(&a, &b)| a + K::from_i8(b).unwrap())
+                    .collect_vec()
+            })
+            .collect_vec();
+        Ok(a)
+    }
+}
+
 fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
     // https://stackoverflow.com/questions/196017/unique-non-repeating-random-numbers-in-o1#196065
     let mut max_idx = bucket.len() - 1;

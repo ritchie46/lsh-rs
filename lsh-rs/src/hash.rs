@@ -1,4 +1,5 @@
 use crate::data::Integer;
+use crate::multi_probe::StepWiseProbe;
 use crate::{data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils::create_rng};
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
@@ -18,7 +19,12 @@ pub trait VecHash<N, K> {
         self.hash_vec_query(v)
     }
 
+    /// If the hasher implements the QueryDirectedProbe trait it should return Some(self)
     fn as_query_directed_probe(&self) -> Option<&dyn QueryDirectedProbe<N, K>> {
+        None
+    }
+    /// If the hasher implements the StepWiseProbe trait it should return Some(self)
+    fn as_step_wise_probe(&self) -> Option<&dyn StepWiseProbe<N, K>> {
         None
     }
 }
