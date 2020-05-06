@@ -65,6 +65,9 @@ impl<N: Numeric> VecHash<N, i8> for SignRandomProjections<N> {
     fn hash_vec_query(&self, v: &[N]) -> Vec<i8> {
         self.hash_vec(v)
     }
+    fn as_step_wise_probe(&self) -> Option<&dyn StepWiseProbe<N, i8>> {
+        Some(self)
+    }
 }
 
 /// L2 Hasher family. [Read more.](https://arxiv.org/pdf/1411.3787.pdf)

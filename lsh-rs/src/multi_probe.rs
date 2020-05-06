@@ -22,12 +22,16 @@ pub trait QueryDirectedProbe<N, K> {
     fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>>;
 }
 
-pub trait StepWiseProbe<N, K>: VecHash<N, K>
+pub trait StepWiseProbe<N, K>: VecHash<N, K> {
+    fn step_wise_probe(&self, q: &[N], budget: usize, hash_len: usize) -> Result<Vec<Vec<K>>>;
+}
+
+impl<N> StepWiseProbe<N, i8> for SignRandomProjections<N>
 where
-    K: Integer,
+    N: Numeric,
 {
-    fn step_wise_probe(&self, q: &[N], budget: usize, hash_len: usize) -> Result<Vec<Vec<K>>> {
-        let probing_seq = step_wise_probing(hash_len, budget);
+    fn step_wise_probe(&self, q: &[N], budget: usize, hash_len: usize) -> Result<Vec<Vec<i8>>> {
+        let probing_seq = step_wise_probing(hash_len, budget, false);
         let original_hash = self.hash_vec_query(q);
 
         let a = probing_seq
@@ -36,7 +40,15 @@ where
                 original_hash
                     .iter()
                     .zip(pertub)
-                    .map(|(&a, &b)| a + K::from_i8(b).unwrap())
+                    .map(
+                        |(&original, &shift)| {
+                            if shift == 1 {
+                                original * -1
+                            } else {
+                                original
+                            }
+                        },
+                    )
                     .collect_vec()
             })
             .collect_vec();
@@ -53,7 +65,10 @@ fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
 
     for _ in 0..n {
         let idx = rng.sample(Uniform::new(0, max_idx));
-        samples.push(bucket[idx]);
+        debug_assert!(idx < bucket.len());
+        unsafe {
+            samples.push(*bucket.get_unchecked(idx));
+        };
         bucket.swap(idx, max_idx);
         max_idx -= 1;
     }
@@ -79,17 +94,26 @@ pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<i8> {
 
 /// Retrieve perturbation indexes. Every index in a hash can be perturbed by +1 or -1.
 ///
+/// First retrieve all hashes where 1 index is changed,
+/// then all combinations where two indexes are changed etc.
+///
 /// # Arguments
 /// * - `hash_length` The hash length is used to determine all the combinations of indexes that can be shifted.
 /// * - `n_perturbation` The number of indexes allowed to be changed. We generally first deplete
-///     all hashes where 1 index is changed. Then all combinations where two indexes are changed etc.
+/// * - `two_shifts` If true every index is changed by +1 and -1, else only by +1.
 fn step_wise_perturb(
     hash_length: usize,
     n_perturbations: usize,
-) -> Box<dyn Iterator<Item = Vec<(usize, i8)>>> {
-    // TODO: later opt in for impl return type
-    //       https://stackoverflow.com/questions/27646925/how-do-i-return-a-filter-iterator-from-a-function
-    let idx = 0..hash_length * 2;
+    two_shifts: bool,
+) -> impl Iterator<Item = Vec<(usize, i8)>> {
+    let multiply;
+    if two_shifts {
+        multiply = 2
+    } else {
+        multiply = 1
+    }
+
+    let idx = 0..hash_length * multiply;
     let switchpoint = hash_length;
     let a = idx.combinations(n_perturbations).map(move |comb| {
         // return of comb are indexes and perturbations (-1 or +1).
@@ -108,7 +132,7 @@ fn step_wise_perturb(
             })
             .collect_vec()
     });
-    Box::new(a)
+    a
 }
 
 /// Generates new hashes by step wise shifting one indexes.
@@ -116,24 +140,32 @@ fn step_wise_perturb(
 /// then the two index shifts, three index shifts etc.
 ///
 /// This is done until the budget is depleted.
-pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<i8>> {
+pub fn step_wise_probing(hash_len: usize, mut budget: usize, two_shifts: bool) -> Vec<Vec<i8>> {
     let mut hash_perturbs = Vec::with_capacity(budget);
 
     let n = hash_len as u64;
     // number of combinations (indexes we allow to perturb)
     let mut k = 1;
-    let mut budget = budget as f64;
-    while budget > 0. && k <= n {
+    while budget > 0 && k <= n {
         // binomial coefficient
         // times two as we have -1 and +1.
-        let n_combinations = binomial(n, k) * 2.;
+        let multiply;
+        if two_shifts {
+            multiply = 2
+        } else {
+            multiply = 1
+        }
+        let n_combinations = binomial(n, k) as usize * multiply;
 
-        step_wise_perturb(n as usize, k as usize)
+        step_wise_perturb(n as usize, k as usize, two_shifts)
             .take(budget as usize)
             .for_each(|v| {
                 let mut new_perturb = vec![0; hash_len];
-                v.iter()
-                    .for_each(|(idx, shift)| new_perturb[*idx] += *shift);
+                v.iter().for_each(|(idx, shift)| {
+                    debug_assert!(*idx < new_perturb.len());
+                    let v = unsafe { new_perturb.get_unchecked_mut(*idx) };
+                    *v += *shift;
+                });
                 hash_perturbs.push(new_perturb)
             });
         k += 1;
@@ -145,7 +177,7 @@ pub fn step_wise_probing(hash_len: usize, budget: usize) -> Vec<Vec<i8>> {
 #[derive(PartialEq, Clone)]
 struct PerturbState<'a, N, K>
 where
-    N: Numeric + Float,
+    N: Numeric + Float + Copy,
 {
     // original sorted zj
     z: &'a [usize],
@@ -176,8 +208,10 @@ where
     fn score(&self) -> N {
         let mut score = Zero::zero();
         for &index in self.selection.iter() {
-            let zj = self.z[index];
-            score += self.distances[zj];
+            debug_assert!(index < self.z.len());
+            let zj = unsafe { *self.z.get_unchecked(index) };
+            debug_assert!(zj < self.distances.len());
+            unsafe { score += self.distances.get_unchecked(zj).clone() };
         }
         score
     }
@@ -186,7 +220,8 @@ where
     fn i_delta(&self) -> Vec<(usize, K)> {
         let mut out = Vec::with_capacity(self.z.len());
         for &idx in self.selection.iter() {
-            let zj = self.z[idx];
+            debug_assert!(idx < self.z.len());
+            let zj = unsafe { *self.z.get_unchecked(idx) };
             let delta;
             let index;
             if zj >= self.switchpoint {
@@ -223,7 +258,8 @@ where
     fn gen_hash(&mut self) -> Vec<K> {
         let mut hash = self.original_hash.take().expect("hash already taken");
         for (i, delta) in self.i_delta() {
-            let ptr = &mut hash[i];
+            debug_assert!(i < hash.len());
+            let ptr = unsafe { hash.get_unchecked_mut(i) };
             *ptr += delta
         }
         hash
@@ -351,7 +387,8 @@ where
         // Check if hasher has implemented this trait. If so follow this more specialized path.
         // Only L2 should have implemented it. This is the trick to choose a different function
         // path for the L2 struct.
-        if self.hashers[0].as_query_directed_probe().is_some() {
+        let h0 = &self.hashers[0];
+        if h0.as_query_directed_probe().is_some() {
             for (i, hasher) in self.hashers.iter().enumerate() {
                 if let Some(h) = hasher.as_query_directed_probe() {
                     let hashes = h.query_directed_probe(v, self._multi_probe_budget)?;
@@ -360,22 +397,18 @@ where
                     }
                 }
             }
-        } else {
-            let probing_seq = step_wise_probing(self.n_projections, self._multi_probe_budget);
-            for (i, proj) in self.hashers.iter().enumerate() {
-                // fist process the original query
-                let original_hash = proj.hash_vec_query(v);
-                self.process_bucket_union_result(&original_hash, i, &mut bucket_union)?;
-
-                for pertub in &probing_seq {
-                    let hash: Vec<K> = original_hash
-                        .iter()
-                        .zip(pertub)
-                        .map(|(&a, &b)| a + K::from_i8(b).unwrap())
-                        .collect_vec();
-                    self.process_bucket_union_result(&hash, i, &mut bucket_union)?;
+        } else if h0.as_step_wise_probe().is_some() {
+            for (i, hasher) in self.hashers.iter().enumerate() {
+                if let Some(h) = hasher.as_step_wise_probe() {
+                    let hashes =
+                        h.step_wise_probe(v, self._multi_probe_budget, self.n_projections)?;
+                    for hash in hashes {
+                        self.process_bucket_union_result(&hash, i, &mut bucket_union)?
+                    }
                 }
             }
+        } else {
+            unimplemented!()
         }
         Ok(bucket_union)
     }
@@ -393,7 +426,7 @@ mod test {
 
     #[test]
     fn test_step_wise_perturb() {
-        let a = step_wise_perturb(4, 2);
+        let a = step_wise_perturb(4, 2, true);
         assert_eq!(
             vec![vec![(0, 1), (1, 1)], vec![(0, 1), (2, 1)]],
             a.take(2).collect_vec()
@@ -402,7 +435,7 @@ mod test {
 
     #[test]
     fn test_step_wise_probe() {
-        let a = step_wise_probing(4, 20);
+        let a = step_wise_probing(4, 20, true);
         assert_eq!(vec![1, 0, 0, 0], a[0]);
         assert_eq!(vec![0, 1, -1, 0], a[a.len() - 1]);
     }

@@ -15,11 +15,10 @@
 //!     - Maximum Inner Product (Dot products)
 //! * **Multi Probe LSH**
 //!     - **Step wise probing**
-//!         - SRP
-//!         - L2
-//!         - MIPS
+//!         - SRP (only bit shifts)
 //!     - **Query directed probing**
 //!         - L2
+//!         - MIPS
 //! * Generic numeric types
 //!
 //! ## Getting started
