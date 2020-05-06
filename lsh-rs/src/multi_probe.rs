@@ -258,78 +258,84 @@ where
 {
 }
 
-impl<N, K> L2<N, K>
-where
-    N: Numeric + Float,
-    K: Integer,
-{
-    /// Computes the distance between the query hash and the boundary of the slot r (W in the paper)
-    ///
-    /// As stated by Multi-Probe LSH paper:
-    /// For δ ∈ {−1, +1}, let xi(δ) be the distance of q from the boundary of the slot
-    fn distance_to_bound(&self, q: &[N], hash: Option<&Vec<K>>) -> (Array1<N>, Array1<N>) {
-        let hash = match hash {
-            None => self.hash_vec(q).to_vec(),
-            Some(h) => h.iter().map(|&k| N::from(k).unwrap()).collect_vec(),
-        };
-        let f = self.a.dot(&aview1(q)) + &self.b;
-        let xi_min1 = f - &aview1(&hash) * self.r;
-        let xi_plus1: Array1<N> = xi_min1.map(|x| self.r - *x);
-        (xi_min1, xi_plus1)
-    }
-}
-
-impl<N, K> QueryDirectedProbe<N, K> for L2<N, K>
-where
-    N: Numeric + Float,
-    K: Integer,
-{
-    fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>> {
-        // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
-        // https://www.youtube.com/watch?v=c5DHtx5VxX8
-        let hash = self.hash_vec_query(q);
-        let (xi_min, xi_plus) = self.distance_to_bound(q, Some(&hash));
-        // >= this point = +1
-        // < this point = -1
-        let switchpoint = xi_min.len();
-
-        let distances: Vec<N> = stack!(Axis(0), xi_min, xi_plus).to_vec();
-
-        // indexes of the least scores to the highest
-        // all below is an argsort
-        let z = distances.clone();
-        let mut z = z.iter().enumerate().collect::<Vec<_>>();
-        z.sort_unstable_by(|(_idx_a, a), (_idx_b, b)| a.partial_cmp(b).unwrap());
-        let z = z.iter().map(|(idx, _)| *idx).collect::<Vec<_>>();
-
-        let mut hashes = Vec::with_capacity(budget + 1);
-        hashes.push(hash.clone());
-        // Algorithm 1 from paper
-        let mut heap = BinaryHeap::new();
-        let a0 = PerturbState::new(&z, &distances, switchpoint, hash);
-        heap.push(a0);
-        for _ in 0..budget {
-            let mut ai = match heap.pop() {
-                Some(ai) => ai,
-                None => {
-                    return Err(Error::Failed(
-                        "All query directed probing combinations depleted".to_string(),
-                    ))
-                }
-            };
-            let mut a_s = ai.clone();
-            let mut a_e = ai.clone();
-            if a_s.shift().is_ok() {
-                heap.push(a_s);
+macro_rules! impl_query_directed_probe {
+    ($vechash:ident) => {
+        impl<N, K> $vechash<N, K>
+        where
+            N: Numeric + Float,
+            K: Integer,
+        {
+            /// Computes the distance between the query hash and the boundary of the slot r (W in the paper)
+            ///
+            /// As stated by Multi-Probe LSH paper:
+            /// For δ ∈ {−1, +1}, let xi(δ) be the distance of q from the boundary of the slot
+            fn distance_to_bound(&self, q: &[N], hash: Option<&Vec<K>>) -> (Array1<N>, Array1<N>) {
+                let hash = match hash {
+                    None => self.hash_vec(q).to_vec(),
+                    Some(h) => h.iter().map(|&k| N::from(k).unwrap()).collect_vec(),
+                };
+                let f = self.a.dot(&aview1(q)) + &self.b;
+                let xi_min1 = f - &aview1(&hash) * self.r;
+                let xi_plus1: Array1<N> = xi_min1.map(|x| self.r - *x);
+                (xi_min1, xi_plus1)
             }
-            if a_e.expand().is_ok() {
-                heap.push(a_e);
-            }
-            hashes.push(ai.gen_hash())
         }
-        Ok(hashes)
-    }
+
+        impl<N, K> QueryDirectedProbe<N, K> for $vechash<N, K>
+        where
+            N: Numeric + Float,
+            K: Integer,
+        {
+            fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>> {
+                // https://www.cs.princeton.edu/cass/papers/mplsh_vldb07.pdf
+                // https://www.youtube.com/watch?v=c5DHtx5VxX8
+                let hash = self.hash_vec_query(q);
+                let (xi_min, xi_plus) = self.distance_to_bound(q, Some(&hash));
+                // >= this point = +1
+                // < this point = -1
+                let switchpoint = xi_min.len();
+
+                let distances: Vec<N> = stack!(Axis(0), xi_min, xi_plus).to_vec();
+
+                // indexes of the least scores to the highest
+                // all below is an argsort
+                let z = distances.clone();
+                let mut z = z.iter().enumerate().collect::<Vec<_>>();
+                z.sort_unstable_by(|(_idx_a, a), (_idx_b, b)| a.partial_cmp(b).unwrap());
+                let z = z.iter().map(|(idx, _)| *idx).collect::<Vec<_>>();
+
+                let mut hashes = Vec::with_capacity(budget + 1);
+                hashes.push(hash.clone());
+                // Algorithm 1 from paper
+                let mut heap = BinaryHeap::new();
+                let a0 = PerturbState::new(&z, &distances, switchpoint, hash);
+                heap.push(a0);
+                for _ in 0..budget {
+                    let mut ai = match heap.pop() {
+                        Some(ai) => ai,
+                        None => {
+                            return Err(Error::Failed(
+                                "All query directed probing combinations depleted".to_string(),
+                            ))
+                        }
+                    };
+                    let mut a_s = ai.clone();
+                    let mut a_e = ai.clone();
+                    if a_s.shift().is_ok() {
+                        heap.push(a_s);
+                    }
+                    if a_e.expand().is_ok() {
+                        heap.push(a_e);
+                    }
+                    hashes.push(ai.gen_hash())
+                }
+                Ok(hashes)
+            }
+        }
+    };
 }
+impl_query_directed_probe!(L2);
+impl_query_directed_probe!(MIPS);
 
 impl<N, K, H, T> LSH<H, N, T, K>
 where

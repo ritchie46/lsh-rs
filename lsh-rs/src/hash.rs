@@ -8,6 +8,7 @@ use num::traits::NumCast;
 use num::{Float, Zero};
 use serde::export::PhantomData;
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 
 /// Implement this trait to create your own custom hashers.
 /// In case of a symmetrical hash function, only `hash_vec_query` needs to be implemented.
@@ -218,6 +219,18 @@ where
     fn hash_vec_put(&self, v: &[N]) -> Vec<K> {
         let p = self.tranform_put(v);
         self.hasher.hash_vec_query(&p)
+    }
+}
+
+impl<N, K> Deref for MIPS<N, K>
+where
+    N: Numeric,
+    K: Integer,
+{
+    type Target = L2<N, K>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.hasher
     }
 }
 
