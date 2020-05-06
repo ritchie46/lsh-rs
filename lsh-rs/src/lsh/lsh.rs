@@ -177,6 +177,12 @@ where
         }
         lsh_from_lsh(self, hashers)
     }
+
+    /// Fit M parameter of the MIPS hasher. This needs to be done before the hasher can be used.
+    pub fn fit(&mut self, vs: &[Vec<N>]) -> Result<()> {
+        self.hashers.iter_mut().for_each(|h| h.fit(vs));
+        Ok(())
+    }
 }
 
 impl<H, N, T, K> LSH<H, N, T, K>

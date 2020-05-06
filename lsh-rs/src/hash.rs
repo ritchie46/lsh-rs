@@ -161,10 +161,10 @@ where
         }
     }
 
-    pub fn fit(&mut self, v: &[N]) {
+    pub fn fit(&mut self, v: &[Vec<N>]) {
         // TODO: add fit to vechash trait?
         let mut max_l2 = Zero::zero();
-        for x in v.chunks(self.dim) {
+        for x in v.iter() {
             let l2 = l2_norm(x);
             if l2 > max_l2 {
                 max_l2 = l2
