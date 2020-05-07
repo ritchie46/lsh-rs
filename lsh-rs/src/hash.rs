@@ -136,7 +136,7 @@ where
 
 /// Maximum Inner Product Search. [Read more.](https://papers.nips.cc/paper/5329-asymmetric-lsh-alsh-for-sublinear-time-maximum-inner-product-search-mips.pdf)
 #[derive(Serialize, Deserialize, Clone)]
-pub struct MIPS<N, K> {
+pub struct MIPS<N, K = i32> {
     U: N,
     M: N,
     m: usize,

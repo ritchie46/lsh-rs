@@ -1,6 +1,6 @@
 mod dist;
 use crate::dist::sort_by_distance;
-use lsh_rs::{Error as LshError, LshMem, LshSql, SignRandomProjections, L2, MIPS};
+use lsh_rs::{prelude::Error as LshError, prelude::*};
 use pyo3::exceptions::{RuntimeError, ValueError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -78,11 +78,11 @@ fn floky(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 enum LshTypes {
-    L2(LshSql<f32, L2<f32>>),
-    L2Mem(LshMem<f32, L2<f32>>),
-    Mips(LshSql<f32, MIPS<f32>>),
-    Srp(LshSql<f32, SignRandomProjections<f32>>),
-    SrpMem(LshMem<f32, SignRandomProjections<f32>>),
+    L2(LshSql<L2<f32, i32>, f32, i32>),
+    L2Mem(LshMem<L2<f32, i32>, f32, i32>),
+    MipsMem(LshMem<MIPS<f32, i32>, f32, i32>),
+    Srp(LshSql<SignRandomProjections<f32>, f32, i8>),
+    SrpMem(LshMem<SignRandomProjections<f32>, f32, i8>),
     Empty,
 }
 
@@ -91,7 +91,7 @@ macro_rules! call_lsh_types {
         match $lsh {
             LshTypes::L2(lsh) => {lsh.$method_call($value) $($optional),*},
             LshTypes::L2Mem(lsh) => {lsh.$method_call($value)$($optional),*},
-            LshTypes::Mips(lsh) => {lsh.$method_call($value)$($optional),*},
+            LshTypes::MipsMem(lsh) => {lsh.$method_call($value)$($optional),*},
             LshTypes::Srp(lsh) => {lsh.$method_call($value)$($optional),*},
             LshTypes::SrpMem(lsh) => {lsh.$method_call($value)$($optional),*},
             LshTypes::Empty => panic!("base not initialized"),
@@ -102,7 +102,7 @@ macro_rules! call_lsh_types {
         match $lsh {
             LshTypes::L2(lsh) => {lsh.$method_call() $($optional),*},
             LshTypes::L2Mem(lsh) => {lsh.$method_call() $($optional),*},
-            LshTypes::Mips(lsh) => {lsh.$method_call() $($optional),*},
+            LshTypes::MipsMem(lsh) => {lsh.$method_call() $($optional),*},
             LshTypes::Srp(lsh) => {lsh.$method_call() $($optional),*},
             LshTypes::SrpMem(lsh) => {lsh.$method_call() $($optional),*},
             LshTypes::Empty => panic!("base not initialized"),
@@ -152,7 +152,7 @@ impl Base {
             LshTypes::L2Mem(lsh) => {
                 py.allow_threads(move || lsh.query_bucket_ids_batch_arr_par(vs))
             }
-            LshTypes::Mips(lsh) => lsh.query_bucket_ids_batch_arr(vs),
+            LshTypes::MipsMem(lsh) => lsh.query_bucket_ids_batch_arr(vs),
             LshTypes::Srp(lsh) => lsh.query_bucket_ids_batch_arr(vs),
             LshTypes::SrpMem(lsh) => {
                 py.allow_threads(move || lsh.query_bucket_ids_batch_arr_par(vs))
@@ -174,7 +174,7 @@ impl Base {
                 .into_iter()
                 .map(|dp| dp.clone())
                 .collect(),
-            LshTypes::Mips(lsh) => lsh
+            LshTypes::MipsMem(lsh) => lsh
                 .query_bucket(&v)?
                 .into_iter()
                 .map(|dp| dp.clone())
@@ -207,7 +207,6 @@ impl Base {
     fn _commit(&mut self) -> IntResult<()> {
         match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.commit()?,
-            LshTypes::Mips(lsh) => lsh.commit()?,
             LshTypes::Srp(lsh) => lsh.commit()?,
             _ => panic!("base not initialized"),
         };
@@ -217,7 +216,6 @@ impl Base {
     fn _init_transaction(&mut self) -> IntResult<()> {
         match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.init_transaction()?,
-            LshTypes::Mips(lsh) => lsh.init_transaction()?,
             LshTypes::Srp(lsh) => lsh.init_transaction()?,
             _ => panic!("base not initialized"),
         };
@@ -227,7 +225,6 @@ impl Base {
     fn _index(&self) -> IntResult<()> {
         match &self.lsh {
             LshTypes::L2(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
-            LshTypes::Mips(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
             LshTypes::Srp(lsh) => lsh.hash_tables.as_ref().unwrap().index_hash()?,
             _ => panic!("base not initialized"),
         };
@@ -237,7 +234,6 @@ impl Base {
     fn _to_mem(&mut self) -> IntResult<()> {
         match &mut self.lsh {
             LshTypes::L2(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem()?,
-            LshTypes::Mips(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem()?,
             LshTypes::Srp(lsh) => lsh.hash_tables.as_mut().unwrap().to_mem()?,
             _ => panic!("base not initialized"),
         };
@@ -341,7 +337,7 @@ impl LshL2 {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim)
+        let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -374,7 +370,7 @@ impl LshL2Mem {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim)
+        let r = LshMem::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -409,7 +405,7 @@ impl LshMips {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim)
+        let r = LshMem::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -422,7 +418,7 @@ impl LshMips {
         Ok((
             LshMips {},
             Base {
-                lsh: LshTypes::Mips(lsh),
+                lsh: LshTypes::MipsMem(lsh),
             },
         ))
     }
@@ -440,7 +436,7 @@ impl LshSrp {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshSql::<f32, _>::new(n_projections, n_hash_tables, dim)
+        let r = LshSql::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
@@ -471,7 +467,7 @@ impl LshSrpMem {
         seed: u64,
         db_path: String,
     ) -> PyResult<(Self, Base)> {
-        let r = LshMem::<f32, _>::new(n_projections, n_hash_tables, dim)
+        let r = LshMem::new(n_projections, n_hash_tables, dim)
             .seed(seed)
             .only_index()
             .set_database_file(&db_path)
