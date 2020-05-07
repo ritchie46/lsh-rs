@@ -1,6 +1,6 @@
 pub use crate::{
     error::{Error, Result},
-    hash::{SignRandomProjections, VecHash, L2, MIPS},
+    hash::{MinHash, SignRandomProjections, VecHash, L2, MIPS},
     lsh::lsh::LSH,
     table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_mem::SqlTableMem},
 };

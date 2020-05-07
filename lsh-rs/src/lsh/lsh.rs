@@ -185,6 +185,25 @@ where
     }
 }
 
+// impl<N, T, K> LSH<MinHash<N, K>, N, T, K>
+//     where
+//         N: Integer + Numeric + DeserializeOwned,
+//         K: Integer + DeserializeOwned,
+//         T: HashTables<N, K>,
+// {
+//     pub fn minhash(&mut self) -> Result<Self> {
+//         let mut rng = create_rng(self._seed);
+//         let mut hashers = Vec::with_capacity(self.n_hash_tables);
+//
+//         for _ in 0..self.n_hash_tables {
+//             let seed = rng.gen();
+//             let hasher = MinHash::new(self.n_projections, self.dim, seed);
+//             hashers.push(hasher);
+//         }
+//         lsh_from_lsh(self, hashers)
+//     }
+// }
+
 impl<H, N, T, K> LSH<H, N, T, K>
 where
     N: Numeric,

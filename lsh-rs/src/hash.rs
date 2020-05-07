@@ -4,8 +4,10 @@ use crate::{data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
-use num::traits::NumCast;
-use num::{Float, Zero};
+use num::{
+    traits::{NumCast, PrimInt},
+    Float, Zero,
+};
 use serde::export::PhantomData;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -237,6 +239,68 @@ where
     }
 }
 
+pub struct MinHash<N = u8, K = i32> {
+    pub pi: Array2<N>,
+    n_projections: usize,
+    phantom: PhantomData<K>,
+}
+
+impl<N, K> MinHash<N, K>
+where
+    N: Integer,
+    K: Integer,
+{
+    pub fn new(n_projections: usize, dim: usize, seed: u64) -> Self {
+        let mut pi = Array::zeros((n_projections, dim));
+        let mut rng = create_rng(seed);
+
+        for row in 0..n_projections {
+            // randomly permute the indexes of vector that should be hashed.
+            // So a vector of length 4 could have the following random pi permutation:
+            // [3, 2, 4, 1]
+            // We start counting from 1, as we want to multiply with these pi vectors and take the
+            // lowest non zero output
+            let permutation_idx = rand::seq::index::sample(&mut rng, dim, dim)
+                .into_iter()
+                .map(|idx| N::from_usize(idx + 1).expect("could not cast idx to generic"))
+                .collect::<Vec<_>>();
+            let mut slice = pi.slice_mut(s![row, ..]);
+            slice += &aview1(&permutation_idx);
+        }
+        MinHash {
+            pi,
+            n_projections,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<N, K> VecHash<N, K> for MinHash<N, K>
+where
+    N: Integer,
+    K: Integer,
+{
+    fn hash_vec_query(&self, v: &[N]) -> Vec<K> {
+        let a = &self.pi * &aview1(v);
+        let init = K::from_usize(self.n_projections).expect("could not cast to K");
+        let hash = a.map_axis(Axis(1), |view| {
+            view.into_iter().fold(init, |acc, v| {
+                if *v > Zero::zero() {
+                    let v = K::from(*v).expect("could not cast N to K");
+                    if v < acc {
+                        v
+                    } else {
+                        acc
+                    }
+                } else {
+                    acc
+                }
+            })
+        });
+        hash.to_vec()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -255,5 +319,13 @@ mod test {
         println!("close: {:?} distant: {:?}", (&h1, &h2), &h3);
         assert_eq!(h1, h2);
         assert_ne!(h1, h3);
+    }
+
+    #[test]
+    fn test_minhash() {
+        let n_projections = 3;
+        let h = <MinHash>::new(n_projections, 5, 0);
+        let hash = h.hash_vec_query(&[1, 0, 1, 0, 1]);
+        assert_eq!(hash.len(), n_projections)
     }
 }

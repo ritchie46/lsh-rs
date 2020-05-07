@@ -2,7 +2,7 @@ use ndarray::{LinalgScalar, ScalarOperand};
 use num::{FromPrimitive, NumCast, ToPrimitive};
 use serde::export::fmt::{Debug, Display};
 use serde::Serialize;
-use std::cmp::{PartialEq, PartialOrd};
+use std::cmp::{Ord, PartialEq, PartialOrd};
 use std::hash::Hash;
 use std::ops::AddAssign;
 
@@ -43,6 +43,7 @@ pub trait Integer:
     + Sync
     + PartialEq
     + PartialOrd
+    + Ord
     + FromPrimitive
     + AddAssign
     + Serialize
@@ -52,6 +53,11 @@ pub trait Integer:
     + Hash
 {
 }
+impl Integer for u8 {}
+impl Integer for u16 {}
+impl Integer for u32 {}
+impl Integer for u64 {}
+
 impl Integer for i8 {}
 impl Integer for i16 {}
 impl Integer for i32 {}
