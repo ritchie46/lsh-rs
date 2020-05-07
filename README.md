@@ -14,9 +14,10 @@ For more information on the subject see:
 ## Implementations
 
 * **Base LSH**
-    - Signed Random Projections (Cosine similarity)
+    - Signed Random Projections *(Cosine similarity)*
     - L2 distance
-    - Maximum Inner Product (Dot products)
+    - MIPS *(Dot products/ Maximum Inner Product Search)*
+    - MinHash *(Jaccard Similarity)*
 * **Multi Probe LSH**
     - **Step wise probing**
         - SRP (only bit shifts)

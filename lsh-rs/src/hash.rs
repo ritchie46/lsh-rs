@@ -4,10 +4,7 @@ use crate::{data::Numeric, dist::l2_norm, multi_probe::QueryDirectedProbe, utils
 use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
-use num::{
-    traits::{NumCast, PrimInt},
-    Float, Zero,
-};
+use num::{traits::NumCast, Float, Zero};
 use serde::export::PhantomData;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -239,6 +236,10 @@ where
     }
 }
 
+/// A hash family for the [Jaccard Index](https://en.wikipedia.org/wiki/Jaccard_index)
+/// /// The generic integer N, needs to be able to hold the number of dimensions.
+/// so a `u8` with a vector of > 255 dimensions will cause a `panic`.
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MinHash<N = u8, K = i32> {
     pub pi: Array2<N>,
     n_projections: usize,

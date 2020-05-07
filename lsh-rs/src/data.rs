@@ -34,25 +34,7 @@ impl Numeric for u16 {}
 impl Numeric for u32 {}
 impl Numeric for u64 {}
 
-pub trait Integer:
-    LinalgScalar
-    + ScalarOperand
-    + NumCast
-    + ToPrimitive
-    + Send
-    + Sync
-    + PartialEq
-    + PartialOrd
-    + Ord
-    + FromPrimitive
-    + AddAssign
-    + Serialize
-    + Debug
-    + Eq
-    + Display
-    + Hash
-{
-}
+pub trait Integer: Numeric + Ord + Eq + Hash {}
 impl Integer for u8 {}
 impl Integer for u16 {}
 impl Integer for u32 {}

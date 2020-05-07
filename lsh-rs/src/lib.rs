@@ -10,6 +10,10 @@
 //! ## Implementations
 //!
 //! * **Base LSH**
+//! - Signed Random Projections *(Cosine similarity)*
+//! - L2 distance
+//! - MIPS *(Dot products/ Maximum Inner Product Search)*
+//! - MinHash *(Jaccard Similarity)*
 //!     - Signed Random Projections (Cosine similarity)
 //!     - L2 distance
 //!     - Maximum Inner Product (Dot products)
@@ -49,7 +53,7 @@
 //! let n_projections = 9;
 //! let n_hash_tables = 30;
 //! let dim = 10;
-//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).srp();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).srp().unwrap();
 //! ```
 //!
 //! ## L2
@@ -63,6 +67,17 @@
 //! let n_hash_tables = 10;
 //! let dim = 10;
 //! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).l2(bucket_width).unwrap();
+//! ```
+//!
+//! ## Jaccard Index
+//! LSH for the Jaccard Index
+//! ```rust
+//! use lsh_rs::prelude::*;
+//! let n_projections = 14;
+//! // length of the shingles vector
+//! let dim = 2500;
+//! let n_hash_tables = 10;
+//! let mut lsh = LshSqlMem::<_, u16>::new(n_projections, n_hash_tables, dim).minhash().unwrap();
 //! ```
 //!
 //! ## Maximum Inner Product (MIPS)
@@ -90,7 +105,7 @@
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).seed(12).srp();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).seed(12).srp().unwrap();
 //! ```
 //!
 //! ## Unique indexes
@@ -102,7 +117,7 @@
 //! let n_projections = 9;
 //! let n_hash_tables = 10;
 //! let dim = 10;
-//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).only_index().srp();
+//! let mut lsh = LshMem::<_, f32>::new(n_projections, n_hash_tables, dim).only_index().srp().unwrap();
 //! ```
 //!
 //! ## Builder pattern methods
