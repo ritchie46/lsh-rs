@@ -1,3 +1,4 @@
+//! Some utilities to help choose LSH parameters.
 use crate::dist::l2_norm;
 use crate::prelude::*;
 use fnv::FnvHashSet;

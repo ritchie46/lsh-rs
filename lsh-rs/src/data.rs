@@ -1,3 +1,4 @@
+//! Generic traits for numeric input and hash outputs.
 use ndarray::{LinalgScalar, ScalarOperand};
 use num::{FromPrimitive, NumCast, ToPrimitive};
 use serde::export::fmt::{Debug, Display};

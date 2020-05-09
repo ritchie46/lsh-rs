@@ -1,7 +1,9 @@
+//! Re-export of the public api of lsh-rs.
 pub use crate::{
     error::{Error, Result},
     hash::{MinHash, SignRandomProjections, VecHash, L2, MIPS},
     lsh::lsh::LSH,
+    multi_probe::{QueryDirectedProbe, StepWiseProbe},
     table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_mem::SqlTableMem},
 };
 

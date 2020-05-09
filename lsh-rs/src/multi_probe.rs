@@ -1,3 +1,4 @@
+//! Multi probe LSH
 use crate::data::{Integer, Numeric};
 use crate::{prelude::*, utils::create_rng};
 use fnv::FnvHashSet;
@@ -12,6 +13,8 @@ use statrs::function::factorial::binomial;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
+/// Query directed probing
+///
 /// Implementation of paper:
 ///
 /// Liv, Q., Josephson, W., Whang, L., Charikar, M., & Li, K. (n.d.).
@@ -22,6 +25,7 @@ pub trait QueryDirectedProbe<N, K> {
     fn query_directed_probe(&self, q: &[N], budget: usize) -> Result<Vec<Vec<K>>>;
 }
 
+/// Step wise probing
 pub trait StepWiseProbe<N, K>: VecHash<N, K> {
     fn step_wise_probe(&self, q: &[N], budget: usize, hash_len: usize) -> Result<Vec<Vec<K>>>;
 }
@@ -75,7 +79,7 @@ fn uniform_without_replacement<T: Copy>(bucket: &mut [T], n: usize) -> Vec<T> {
     samples
 }
 
-pub fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<i8> {
+fn create_hash_permutation(hash_len: usize, n: usize) -> Vec<i8> {
     let mut permut = vec![0; hash_len];
     let shift_options = [-1i8, 1];
 
@@ -140,7 +144,7 @@ fn step_wise_perturb(
 /// then the two index shifts, three index shifts etc.
 ///
 /// This is done until the budget is depleted.
-pub fn step_wise_probing(hash_len: usize, mut budget: usize, two_shifts: bool) -> Vec<Vec<i8>> {
+fn step_wise_probing(hash_len: usize, mut budget: usize, two_shifts: bool) -> Vec<Vec<i8>> {
     let mut hash_perturbs = Vec::with_capacity(budget);
 
     let n = hash_len as u64;

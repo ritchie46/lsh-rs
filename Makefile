@@ -7,7 +7,7 @@ test: clean-lsh-db
 	@cd lsh-rs && cargo test --lib
 
 doc:
-	@cd lsh-rs && cargo doc --no-deps --open --lib
+	@cd lsh-rs && cargo doc --no-deps --open --lib --all-features
 
 clean-lsh-db:
 	-@cd lsh-rs && rm **.db3

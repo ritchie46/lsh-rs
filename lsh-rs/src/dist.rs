@@ -1,3 +1,4 @@
+//! Distance/ similarity functions.
 use crate::data::Numeric;
 use ndarray::prelude::*;
 use num::Float;
