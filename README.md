@@ -37,7 +37,7 @@ let n_projections = 9;
 let n_hash_tables = 30;
 let dim = 10;
 let dim = 3;
-let mut lsh = LshMem::new(n_projections, n_hash_tables, dim)\
+let mut lsh = LshMem::new(n_projections, n_hash_tables, dim)
     .srp()
     .unwrap();
 lsh.store_vecs(p);
