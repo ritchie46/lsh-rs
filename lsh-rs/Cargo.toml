@@ -1,6 +1,6 @@
 [package]
 name = "lsh-rs"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["ritchie46 <ritchie46@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -13,7 +13,7 @@ readme = "../README.md"
 # also add blas in ndarray. See Cargo.toml of bench for that.
 blas = ["blas-src", "ndarray/blas"]
 sqlite = ["rusqlite"]
-
+default = ["sqlite"]
 
 [dependencies]
 ndarray = {version = "0.13", features=["serde", "rayon"]}

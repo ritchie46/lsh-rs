@@ -228,7 +228,9 @@ mod error;
 mod utils;
 pub use hash::VecHash;
 pub use multi_probe::{QueryDirectedProbe, StepWiseProbe};
-pub use table::{general::HashTables, mem::MemoryTable, sqlite::SqlTable, sqlite_mem::SqlTableMem};
+pub use table::{general::HashTables, mem::MemoryTable};
+#[cfg(feature = "sqlite")]
+pub use table::{sqlite::SqlTable, sqlite_mem::SqlTableMem};
 pub mod data;
 pub mod prelude;
 pub mod stats;

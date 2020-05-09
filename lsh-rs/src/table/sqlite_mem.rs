@@ -1,3 +1,4 @@
+#![cfg(feature = "sqlite")]
 use super::sqlite::SqlTable;
 use crate::data::Integer;
 use crate::prelude::*;

@@ -563,6 +563,7 @@ where
     }
 }
 
+#[cfg(feature = "sqlite")]
 impl<N, H, K> LSH<H, N, SqlTable<N, K>, K>
 where
     N: Numeric,

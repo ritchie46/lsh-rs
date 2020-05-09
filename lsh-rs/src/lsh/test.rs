@@ -54,6 +54,7 @@ fn test_serialization() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_db() {
     let v1 = &[2., 3., 4.];
     {
@@ -71,6 +72,7 @@ fn test_db() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
 fn test_mem_db() {
     let v1 = &[2., 3., 4.];
     let mut lsh = hi8::LshSqlMem::new(5, 2, 3).seed(2).srp().unwrap();

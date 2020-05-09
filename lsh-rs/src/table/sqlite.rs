@@ -1,3 +1,4 @@
+#![cfg(feature = "sqlite")]
 use super::general::Bucket;
 use crate::constants::DESCRIBE_MAX;
 use crate::data::{Integer, Numeric};
