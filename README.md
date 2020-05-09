@@ -48,8 +48,8 @@ lsh.query_bucket(query);
 ```
 
 ## Documentation
-The latest rust documentation pages can be found [here](https://docs.rs/lsh-rs/latest/lsh_rs/).
-[Read the Python docs](https://lsh-rs.readthedocs.io/en/latest/) for the Python bindings.
+* [Read the Rust docs](https://docs.rs/lsh-rs/latest/lsh_rs/).
+* [Read the Python docs](https://lsh-rs.readthedocs.io/en/latest/) for the Python bindings.
 
 ## Python
 At the moment, the Python bindings are only compiled for Linux x86_64 systems.
