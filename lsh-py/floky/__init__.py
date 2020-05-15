@@ -198,6 +198,7 @@ class Base:
         distance_f: str,
         only_index: bool,
         top_k: int,
+        bound: Union[None, int]
     ) -> List[QueryResult]:
         """
 
@@ -230,7 +231,7 @@ class Base:
 
         qrs = []
         idx_batch = self.lsh.query_bucket_idx_batch(X)
-        sorted_idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k)
+        sorted_idx, dist = sort_by_distances(X, self.data, distance_f, idx_batch, top_k, bound)
         for sorted_idx, dist, original_idx in zip(sorted_idx, dist, idx_batch):
             if len(sorted_idx) == 0:
                 qrs.append(QueryResult([], [], 0, []))
@@ -330,6 +331,7 @@ class L2(Base):
         x: Union[np.ndarray, List[List[float]]],
         only_index: bool = False,
         top_k: int = 5,
+        bound: Union[None, int] = None
     ):
         """
         Query data points.
@@ -343,13 +345,15 @@ class L2(Base):
             Only return indexes and not the data points.
         top_k
             Take the k closest
+        bound
+            Only take the first 0..bound slice
 
         Returns
         -------
         Named tuples List[QueryResult]
         """
 
-        return self._predict(x, "euclidean", only_index, top_k)
+        return self._predict(x, "euclidean", only_index, top_k, bound)
 
 
 class SRP(Base):
@@ -404,6 +408,7 @@ class SRP(Base):
         x: Union[np.ndarray, List[List[float]]],
         only_index: bool = False,
         top_k: int = 5,
+        bound: Union[None, int] = None
     ):
         """
         Query data points.
@@ -417,9 +422,11 @@ class SRP(Base):
             Only return indexes and not the data points.
         top_k
             Take the k closest
+        bound
+            Only take the first 0..bound slice
 
         Returns
         -------
         Named tuples List[QueryResult]
         """
-        return self._predict(x, "cosine", only_index, top_k)
+        return self._predict(x, "cosine", only_index, top_k, bound)

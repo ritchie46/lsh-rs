@@ -19,6 +19,7 @@ pub fn sort_by_distances(
     distance_f: &str,
     indexes: Vec<Vec<usize>>,
     top_k: usize,
+    bound: Option<usize>,
 ) -> PyResult<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
     // let gil_guard = Python::acquire_gil();
     // let py = gil_guard.python();
@@ -40,7 +41,11 @@ pub fn sort_by_distances(
                 .iter()
                 .map(|i| vs.index_axis(Axis(0), *i))
                 .collect::<Vec<_>>();
-            sort_by_distance(q, &vs, distance_f, top_k)
+            let vs = match bound {
+                Some(i) => &vs[..std::cmp::min(i, vs.len() - 1)],
+                None => &vs,
+            };
+            sort_by_distance(q, vs, distance_f, top_k)
         })
         .unzip();
 
