@@ -29,9 +29,24 @@ pub fn sort_by_distance(
     distance_f: &str,
     top_k: usize,
 ) -> (Vec<usize>, Vec<f32>) {
+    // similarities should be reversed
+    // distances not.
+    let reverse = match distance_f {
+        "l2" | "euclidean" => false,
+        "cosine" => true,
+        _ => panic!("distance function not defined"),
+    };
+
     let dist = cdist(q, vs, distance_f);
     let mut intermed: Vec<(usize, f32)> = dist.into_iter().enumerate().collect();
-    intermed.sort_unstable_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+
+    intermed.sort_unstable_by(|(_, a), (_, b)| {
+        let mut ord = a.partial_cmp(b).unwrap();
+        if reverse {
+            ord = ord.reverse()
+        }
+        ord
+    });
     let (idx, dist): (Vec<_>, Vec<_>) = intermed.into_iter().take(top_k).unzip();
     (idx, dist)
 }
