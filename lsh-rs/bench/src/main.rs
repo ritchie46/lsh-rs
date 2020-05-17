@@ -69,3 +69,25 @@ fn bench_sqlite(b: &mut Bencher) {
         sql.put(hash.clone(), &v, 0);
     })
 }
+
+mod srp {
+    use super::*;
+
+    #[bench]
+    fn bench_srp(b: &mut Bencher) {
+        let srp = SignRandomProjections::new(15, 100, 0);
+        let v = [1.; 100];
+        b.iter(|| srp.hash_vec_query(&v))
+    }
+}
+
+mod l2 {
+    use super::*;
+
+    #[bench]
+    fn bench_l2(b: &mut Bencher) {
+        let l2: L2<f64, i8> = L2::new(100, 4., 15, 0);
+        let v = [1.; 100];
+        b.iter(|| l2.hash_vec_query(&v))
+    }
+}

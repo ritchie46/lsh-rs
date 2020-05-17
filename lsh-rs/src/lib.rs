@@ -225,6 +225,10 @@ mod table {
 }
 mod constants;
 mod error;
+
+#[cfg(feature = "workspace")]
+pub mod utils;
+#[cfg(not(feature = "workspace"))]
 mod utils;
 pub use hash::VecHash;
 pub use multi_probe::{QueryDirectedProbe, StepWiseProbe};

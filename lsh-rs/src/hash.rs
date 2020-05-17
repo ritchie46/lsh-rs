@@ -44,7 +44,7 @@ impl<N: Numeric> SignRandomProjections<N> {
     /// This will also be the hash length.
     pub fn new(k: usize, dim: usize, seed: u64) -> Self {
         let mut rng = create_rng(seed);
-        let hp: Array2<f32> = Array::random_using((dim, k), StandardNormal, &mut rng);
+        let hp: Array2<f32> = Array::random_using((k, dim), StandardNormal, &mut rng);
         let hp = hp.mapv(|v| N::from_f32(v).unwrap());
 
         SignRandomProjections { hyperplanes: hp }
@@ -53,7 +53,6 @@ impl<N: Numeric> SignRandomProjections<N> {
     fn hash_vec(&self, v: &[N]) -> Vec<i8> {
         let v = aview1(v);
         self.hyperplanes
-            .t()
             .dot(&v)
             .mapv(|ai| if ai > Zero::zero() { 1 } else { 0 })
             .to_vec()
@@ -109,11 +108,12 @@ where
     }
 
     fn hash_and_cast_vec(&self, v: &[N]) -> Vec<K> {
+        let div_r = N::from_i8(1).unwrap() / self.r;
         // not DRY. we don't call hash_vec to save function call.
-        ((self.a.dot(&aview1(v)) + &self.b) / self.r)
+        ((self.a.dot(&aview1(v)) + &self.b) * div_r)
             .mapv(|x| {
                 let hp = NumCast::from(x.floor())
-                    .expect("Hash value doesnt fit in the Hash number type i8");
+                    .expect("Hash value doesnt fit in the Hash primitive type");
                 hp
             })
             .to_vec()

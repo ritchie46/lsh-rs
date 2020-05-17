@@ -7,6 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lsh-rs = {path = "..", features=["blas"]}
+lsh-rs = {path = "..", features=["blas", "workspace"]}
 blas-src = { version = "0.6", defeault-features = false, features = ["openblas"]}
 rand = {version = "0.7", features = ["small_rng"]}
+
+[features]
+simd = []
