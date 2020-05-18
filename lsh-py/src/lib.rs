@@ -154,14 +154,10 @@ impl Base {
         }
         let q = match &self.lsh {
             LshTypes::L2(lsh) => lsh.query_bucket_ids_batch_arr(vs),
-            LshTypes::L2Mem(lsh) => {
-                py.allow_threads(move || lsh.query_bucket_ids_batch_arr_par(vs))
-            }
+            LshTypes::L2Mem(lsh) => lsh.query_bucket_ids_batch_arr_par(vs),
             LshTypes::MipsMem(lsh) => lsh.query_bucket_ids_batch_arr(vs),
             LshTypes::Srp(lsh) => lsh.query_bucket_ids_batch_arr(vs),
-            LshTypes::SrpMem(lsh) => {
-                py.allow_threads(move || lsh.query_bucket_ids_batch_arr_par(vs))
-            }
+            LshTypes::SrpMem(lsh) => lsh.query_bucket_ids_batch_arr_par(vs),
             _ => panic!("base not initialized"),
         }?;
         Ok(q)
@@ -261,9 +257,7 @@ impl Base {
     }
 
     fn store_vecs(&mut self, vs: &PyArray2<f32>) -> PyResult<()> {
-        let gil_guard = Python::acquire_gil();
-        let py = gil_guard.python();
-        py.allow_threads(move || self._store_vecs(vs))?;
+        self._store_vecs(vs);
         Ok(())
     }
 
