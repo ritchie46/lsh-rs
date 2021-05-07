@@ -6,7 +6,7 @@ use crate::prelude::*;
 use fnv::FnvHashSet;
 use rusqlite::{params, Connection, NO_PARAMS};
 use serde::de::DeserializeOwned;
-use serde::export::PhantomData;
+use std::marker::PhantomData;
 use serde::Serialize;
 use std::cell::Cell;
 

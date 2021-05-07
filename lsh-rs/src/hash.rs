@@ -5,7 +5,7 @@ use ndarray::prelude::*;
 use ndarray_rand::rand_distr::{StandardNormal, Uniform};
 use ndarray_rand::RandomExt;
 use num::{traits::NumCast, Float, Zero};
-use serde::export::PhantomData;
+use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
