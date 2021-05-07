@@ -1,8 +1,8 @@
 //! Generic traits for numeric input and hash outputs.
 use ndarray::{LinalgScalar, ScalarOperand};
 use num::{FromPrimitive, NumCast, ToPrimitive};
-use serde::export::fmt::{Debug, Display};
 use serde::Serialize;
+use std::fmt::{Debug, Display};
 use std::cmp::{Ord, PartialEq, PartialOrd};
 use std::hash::Hash;
 use std::ops::AddAssign;
