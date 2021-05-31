@@ -4,7 +4,7 @@ use crate::constants::DESCRIBE_MAX;
 use crate::data::{Integer, Numeric};
 use crate::prelude::*;
 use fnv::FnvHashSet;
-use rusqlite::{params, Connection, NO_PARAMS};
+use rusqlite::{params, Connection};
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 use serde::Serialize;
@@ -135,7 +135,7 @@ fn get_unique_hash_int(n_hash_tables: usize, conn: &Connection) -> Result<FnvHas
     let mut hash_numbers = FnvHashSet::default();
     for table_name in get_table_names(n_hash_tables) {
         let mut stmt = conn.prepare(&format!["SELECT hash FROM {} LIMIT 100;", table_name])?;
-        let mut rows = stmt.query(NO_PARAMS)?;
+        let mut rows = stmt.query([])?;
 
         while let Some(r) = rows.next()? {
             let blob: Vec<u8> = r.get(0)?;
@@ -287,7 +287,7 @@ where
 WHERE type='table' AND type LIKE '%hash%';"#,
         )?;
 
-        let row: String = stmt.query_row(NO_PARAMS, |row| {
+        let row: String = stmt.query_row([], |row| {
             let i: i64 = row.get_unwrap(0);
             Ok(i.to_string())
         })?;
@@ -342,7 +342,7 @@ WHERE type='table' AND type LIKE '%hash%';"#,
 
     fn load_hashers<H: VecHash<N, K> + DeserializeOwned>(&self) -> Result<Vec<H>> {
         let mut stmt = self.conn.prepare("SELECT * FROM state;")?;
-        let buf: Vec<u8> = stmt.query_row(NO_PARAMS, |row| {
+        let buf: Vec<u8> = stmt.query_row([], |row| {
             let v: Vec<u8> = row.get_unwrap(0);
             Ok(v)
         })?;
@@ -367,7 +367,7 @@ mod test {
             .conn
             .prepare(&format!("SELECT * FROM {}", sql.table_names[0]))
             .expect("query failed");
-        stmt.query(NO_PARAMS).expect("query failed");
+        stmt.query([]).expect("query failed");
     }
 
     #[test]
