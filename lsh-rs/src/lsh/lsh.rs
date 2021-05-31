@@ -2,7 +2,6 @@ use crate::data::Integer;
 use crate::table::general::Bucket;
 use crate::{data::Numeric, prelude::*, utils::create_rng};
 use fnv::FnvHashSet;
-use itertools::Itertools;
 use ndarray::prelude::*;
 use num::Float;
 use rand::Rng;

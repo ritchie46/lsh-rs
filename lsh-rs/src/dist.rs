@@ -2,7 +2,6 @@
 use crate::data::Numeric;
 use ndarray::prelude::*;
 use num::Float;
-use rayon::prelude::*;
 
 /// L2 norm of a single vector.
 ///
