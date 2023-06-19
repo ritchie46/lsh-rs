@@ -79,7 +79,7 @@ fn lsh_from_lsh<
     let hashers = match ht.store_hashers(&hashers) {
         Ok(_) => hashers,
         Err(_) => match ht.load_hashers() {
-            Err(e) => panic!(format!("could not load hashers: {}", e)),
+            Err(e) => panic!("could not load hashers: {}", e),
             Ok(hashers) => hashers,
         },
     };
